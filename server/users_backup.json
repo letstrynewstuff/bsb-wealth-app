@@ -1,0 +1,36 @@
+[
+  {
+    "_id": "6862a2c110b826a9b2742d20",
+    "username": "testuser",
+    "password": "$2b$10$Ynj124zRjNJlUzgdUXlIbO4m.8ea25.acPpFzwUiZvqmxLgQkXkam",
+    "role": "client",
+    "accounts": [
+      {
+        "type": "checking",
+        "balance": 98,
+        "status": "active",
+        "_id": "6862a2c110b826a9b2742d21",
+        "accountNumber": "1123562218"
+      }
+    ],
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6862f6dbfc56fb8e1d302104",
+    "username": "adminuser",
+    "password": "$2b$10$y854fnk1sxCZpAk.P1.MCO3CwlfVzYSRp.NFCdvzR5omxgMpyhZDC",
+    "role": "admin",
+    "accounts": [
+      {
+        "type": "checking",
+        "balance": 1000,
+        "status": "active",
+        "_id": "6862f6dbfc56fb8e1d302105",
+        "accountNumber": "3300818636"
+      }
+    ],
+    "status": "active",
+    "__v": 0
+  }
+]

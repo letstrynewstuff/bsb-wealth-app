@@ -1,0 +1,205 @@
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { MessageSquare } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import axios from "axios";
+import io from "socket.io-client";
+
+const socket = io("http://localhost:5000", {
+  auth: { token: localStorage.getItem("token") },
+});
+
+const HelpSupport = () => {
+  const navigate = useNavigate();
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userData = JSON.parse(localStorage.getItem("userData"));
+
+    if (!token || !userData || userData.role !== "client") {
+      navigate("/login");
+      return;
+    }
+
+    const fetchMessages = async () => {
+      try {
+        const response = await axios.get(
+          "http://localhost:5000/api/client/support-messages",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setMessages(response.data);
+      } catch (err) {
+        console.error("Fetch messages error:", err);
+        setError(err.response?.data?.message || "Error fetching messages");
+        if ([401, 403].includes(err.response?.status)) {
+          navigate("/login");
+        }
+      }
+    };
+
+    fetchMessages();
+
+    socket.on("supportReply", (msg) => {
+      if (msg.userId === userData.id) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    });
+
+    return () => socket.off("supportReply");
+  }, [navigate]);
+
+  const handleMessageChange = (e) => {
+    setMessage(e.target.value);
+    if (error) setError("");
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!message.trim()) {
+      setError("Message cannot be empty");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        "http://localhost:5000/api/client/support",
+        { message: message.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          userId: JSON.parse(localStorage.getItem("userData")).id,
+          username: JSON.parse(localStorage.getItem("userData")).username,
+          email: JSON.parse(localStorage.getItem("userData")).email,
+          message: message.trim(),
+          sender: "client",
+          timestamp: new Date(),
+          status: "open",
+        },
+      ]);
+      setMessage("");
+    } catch (err) {
+      console.error("Send message error:", err);
+      setError(err.response?.data?.message || "Error sending message");
+      if ([401, 403].includes(err.response?.status)) {
+        navigate("/login");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto">
+      <Link
+        to="/dashboard"
+        className="mb-6 text-blue-600 flex items-center gap-2 hover:text-blue-700"
+      >
+        <ArrowRight className="w-4 h-4 rotate-180" /> Back to Dashboard
+      </Link>
+
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-blue-100 p-2 rounded-full">
+            <MessageSquare className="w-5 h-5 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-semibold text-gray-800">
+            Help & Support
+          </h2>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Contact Us
+          </h3>
+          <p className="text-gray-600">
+            Reach out to our support team for assistance with your account,
+            transactions, or any banking needs. Our team is available 24/7 to
+            help you.
+          </p>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg p-4 h-96 overflow-y-auto mb-4">
+          {messages.length === 0 && (
+            <p className="text-gray-600 text-center">No messages yet.</p>
+          )}
+          {messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`mb-4 flex ${
+                msg.sender === "client" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-xs p-3 rounded-lg ${
+                  msg.sender === "client"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 text-gray-800"
+                }`}
+              >
+                <p>{msg.message}</p>
+                <p className="text-xs mt-1 opacity-70">
+                  {new Date(msg.timestamp).toLocaleString("en-US", {
+                    year: "numeric",
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <form onSubmit={handleSendMessage} className="flex gap-2">
+          <input
+            type="text"
+            value={message}
+            onChange={handleMessageChange}
+            placeholder="Type your message..."
+            disabled={isLoading}
+            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isLoading ? "Sending..." : "Send"}
+          </button>
+        </form>
+
+        <div className="mt-6 text-gray-600 text-sm">
+          <p>
+            For urgent issues, contact our support team at{" "}
+            <a
+              href="mailto:support@benningtonstatebank.com"
+              className="text-blue-600 hover:underline"
+            >
+              support@benningtonstatebank.com
+            </a>{" "}
+            or call <strong>1-800-555-1234</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default HelpSupport;
