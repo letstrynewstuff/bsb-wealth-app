@@ -3,6 +3,10 @@ import { Link } from "react-router-dom";
 import { UserPlus } from "lucide-react";
 import axios from "axios";
 
+
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000"; 
+
 const Services = () => {
   const [formData, setFormData] = useState({
     firstName: "",
@@ -60,7 +64,8 @@ const Services = () => {
         throw new Error("Please select at least one account type.");
       }
 
-      await axios.post("http://localhost:5000/api/register", {
+      // Use the dynamic API_BASE_URL for Axios
+      await axios.post(`${API_BASE_URL}/api/register`, {
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,

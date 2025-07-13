@@ -9,12 +9,14 @@ import {
   PlusCircle,
 } from "lucide-react";
 
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
 const Dashboard = () => {
   const [accountCount, setAccountCount] = useState(0);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  // Fetch number of accounts
   useEffect(() => {
     const fetchAccountCount = async () => {
       try {
@@ -24,7 +26,7 @@ const Dashboard = () => {
           return;
         }
 
-        const res = await fetch("http://localhost:5000/api/admin/users", {
+        const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -51,7 +53,6 @@ const Dashboard = () => {
     fetchAccountCount();
   }, [navigate]);
 
-  // Card data
   const dashboardCards = [
     {
       title: "All Customers",

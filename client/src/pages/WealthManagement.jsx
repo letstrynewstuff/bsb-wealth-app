@@ -165,13 +165,13 @@ const WealthManagement = () => {
   });
   const [ctaRef, ctaInView] = useInView({ triggerOnce: true, threshold: 0.1 });
 
-  // Animation variants for staggered reveal of cards/items
+ 
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1, // Delay between children animations
+        staggerChildren: 0.1, 
       },
     },
   };
@@ -192,7 +192,7 @@ const WealthManagement = () => {
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key="wealth-management-page" // Unique key for this page
+        key="wealth-management-page" 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
@@ -207,7 +207,8 @@ const WealthManagement = () => {
           initial={{ opacity: 0, y: 50 }}
           animate={heroInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8 }}
-          className="relative min-h-[60vh] md:h-[70vh] flex items-center text-white"
+          className="relative min-h-[60vh] md:h-[70vh] flex items-center justify-center text-white pt-24 md:pt-0"
+
         >
           <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -217,7 +218,7 @@ const WealthManagement = () => {
                 : "url(https://placehold.co/1920x1080/000000/FFFFFF?text=Wealth+Hero)",
             }}
           ></div>
-          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+          
           <div className="relative z-10 flex flex-col w-full max-w-6xl mx-auto px-4 sm:px-6 text-center">
             <motion.h1
               initial={{ opacity: 0, y: 30 }}

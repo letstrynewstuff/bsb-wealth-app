@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FileEdit } from "lucide-react";
 
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
 const EditTransaction = () => {
   const [transactions, setTransactions] = useState([]);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
@@ -13,10 +16,10 @@ const EditTransaction = () => {
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { transactionId } = useParams(); // Optional: For direct transaction editing via URL
+  const { transactionId } = useParams();
 
-  // Fetch all transactions or a specific transaction
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
@@ -26,7 +29,7 @@ const EditTransaction = () => {
           return;
         }
 
-        const res = await fetch("http://localhost:5000/api/transactions", {
+        const res = await fetch(`${API_BASE_URL}/api/admin/transactions`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -42,7 +45,6 @@ const EditTransaction = () => {
         const data = await res.json();
         setTransactions(data);
 
-        // If transactionId is provided in URL, pre-select it
         if (transactionId) {
           const transaction = data.find((t) => t._id === transactionId);
           if (transaction) {
@@ -68,7 +70,6 @@ const EditTransaction = () => {
     fetchTransactions();
   }, [navigate, transactionId]);
 
-  // Handle transaction selection
   const handleSelectTransaction = (transaction) => {
     setSelectedTransaction(transaction);
     setFormData({
@@ -81,13 +82,11 @@ const EditTransaction = () => {
     setSuccess("");
   };
 
-  // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTransaction) {
@@ -95,10 +94,14 @@ const EditTransaction = () => {
       return;
     }
 
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
+
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/admin/transactions/${selectedTransaction._id}`,
+        `${API_BASE_URL}/api/admin/transactions/${selectedTransaction._id}`,
         {
           method: "PUT",
           headers: {
@@ -122,9 +125,6 @@ const EditTransaction = () => {
       }
 
       setSuccess("Transaction updated successfully");
-      setError("");
-
-      // Update local transaction list
       setTransactions((prev) =>
         prev.map((t) =>
           t._id === selectedTransaction._id ? { ...t, ...data.transaction } : t
@@ -136,60 +136,77 @@ const EditTransaction = () => {
       if (err.message.includes("403") || err.message.includes("401")) {
         navigate("/login");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
+    <div className="p-4 sm:p-6 bg-gray-100 min-h-screen">
       <div className="flex items-center mb-6">
-        <FileEdit className="w-8 h-8 text-blue-700 mr-2" />
-        <h2 className="text-2xl font-semibold text-gray-900">
+        <FileEdit className="w-7 h-7 sm:w-8 sm:h-8 text-blue-700 mr-2" />
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
           Edit Transaction
         </h2>
       </div>
 
       {error && (
-        <div className="mb-4 p-2 bg-red-100 text-red-700 rounded-lg">
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-2 bg-green-100 text-green-700 rounded-lg">
+        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">
           {success}
         </div>
       )}
 
-      {/* Transaction Selection */}
-      <div className="mb-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
+      <div className="mb-6 bg-white p-4 sm:p-6 rounded-lg shadow-md">
+        <h3 className="text-lg sm:text-xl font-medium text-gray-900 mb-4">
           Select Transaction
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {transactions.map((transaction) => (
-            <div
-              key={transaction._id}
-              className={`p-4 rounded-lg shadow-md cursor-pointer ${
-                selectedTransaction?._id === transaction._id
-                  ? "bg-blue-100 border-blue-500 border-2"
-                  : "bg-white hover:bg-gray-50"
-              }`}
-              onClick={() => handleSelectTransaction(transaction)}
-            >
-              <p className="font-semibold">ID: {transaction._id}</p>
-              <p>Amount: ${transaction.amount}</p>
-              <p>Date: {new Date(transaction.date).toLocaleDateString()}</p>
-              <p>Status: {transaction.status}</p>
-              <p>Description: {transaction.description || "N/A"}</p>
-            </div>
-          ))}
+          {transactions.length > 0 ? (
+            transactions.map((transaction) => (
+              <div
+                key={transaction._id}
+                className={`p-4 rounded-lg shadow-md cursor-pointer transition-all duration-200 ${
+                  selectedTransaction?._id === transaction._id
+                    ? "bg-blue-100 border-blue-500 border-2 scale-105"
+                    : "bg-white hover:bg-gray-50 hover:shadow-lg"
+                }`}
+                onClick={() => handleSelectTransaction(transaction)}
+              >
+                <p className="font-semibold text-sm sm:text-base break-words">
+                  ID: {transaction._id}
+                </p>
+                <p className="text-sm sm:text-base">
+                  Amount: ${transaction.amount?.toFixed(2) || "N/A"}
+                </p>
+                <p className="text-sm sm:text-base">
+                  Date: {new Date(transaction.date).toLocaleDateString()}
+                </p>
+                <p className="text-sm sm:text-base">
+                  Status: {transaction.status}
+                </p>
+                <p className="text-sm sm:text-base break-words">
+                  Description: {transaction.description || "N/A"}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-600 col-span-full text-center">
+              No transactions found.
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Edit Form */}
       {selectedTransaction && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Editing Transaction ID: {selectedTransaction._id}
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h3 className="text-lg sm:text-xl font-medium text-gray-900 mb-4">
+            Editing Transaction ID:{" "}
+            <span className="break-words">{selectedTransaction._id}</span>
           </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -206,8 +223,9 @@ const EditTransaction = () => {
                 step="0.01"
                 value={formData.amount}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -223,8 +241,9 @@ const EditTransaction = () => {
                 type="date"
                 value={formData.date}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -239,8 +258,9 @@ const EditTransaction = () => {
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
+                disabled={isLoading}
               >
                 <option value="successful">Successful</option>
                 <option value="pending">Pending</option>
@@ -260,15 +280,17 @@ const EditTransaction = () => {
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 rows="4"
+                disabled={isLoading}
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-blue-700 hover:bg-blue-800 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-blue-700 hover:bg-blue-800 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-base"
+              disabled={isLoading}
             >
-              Update Transaction
+              {isLoading ? "Updating..." : "Update Transaction"}
             </button>
           </form>
         </div>

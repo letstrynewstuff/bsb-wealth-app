@@ -5,6 +5,9 @@ import axios from "axios";
 import Logo from "../assets/logo.png";
 import LoginBg from "../assets/loginbg.png";
 
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
 const InfoBar = () => (
   <div className="w-full bg-blue-800 text-white py-2 px-4 text-sm text-center">
     Lost/Stolen Debit Card Call: 1.800.383.8000 | Billpay Support Call:
@@ -38,13 +41,12 @@ const Login = () => {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/client/login",
+        `${API_BASE_URL}/api/client/login`,
         formData
       );
 
       const { token, user } = response.data;
 
-      // Save full user object that includes ID
       localStorage.setItem("token", token);
       localStorage.setItem("userData", JSON.stringify(user));
 

@@ -17,10 +17,14 @@ import {
   Brain,
   Gift,
   ChevronRight,
+  LineChart,
 } from "lucide-react";
 import io from "socket.io-client";
 
-const socket = io("http://localhost:5000", {
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
+const socket = io(API_BASE_URL, {
   auth: { token: localStorage.getItem("token") },
 });
 
@@ -31,8 +35,21 @@ const Dashboard = () => {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [error, setError] = useState("");
+  const [investmentInsights, setInvestmentInsights] = useState([
+    {
+      title: "Diversify Your Portfolio",
+      tip: "Spread your investments across different asset classes to reduce risk.",
+    },
+    {
+      title: "Long-Term Growth",
+      tip: "Focus on long-term investment goals rather than short-term market fluctuations.",
+    },
+    {
+      title: "Stay Informed",
+      tip: "Keep up-to-date with market news and economic indicators.",
+    },
+  ]);
 
-  // Dynamic Greeting Logic
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Good Morning");
@@ -40,7 +57,6 @@ const Dashboard = () => {
     else setGreeting("Good Evening");
   }, []);
 
-  // Fetch user and account data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -50,7 +66,7 @@ const Dashboard = () => {
           return;
         }
 
-        const userRes = await fetch("http://localhost:5000/api/user", {
+        const userRes = await fetch(`${API_BASE_URL}/api/user`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -61,7 +77,7 @@ const Dashboard = () => {
         const userData = await userRes.json();
         setUserData(userData);
 
-        const accountRes = await fetch("http://localhost:5000/api/account", {
+        const accountRes = await fetch(`${API_BASE_URL}/api/account`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -72,7 +88,7 @@ const Dashboard = () => {
         const accountData = await accountRes.json();
         setAccounts(accountData.accounts);
 
-        const transRes = await fetch("http://localhost:5000/api/transactions", {
+        const transRes = await fetch(`${API_BASE_URL}/api/transactions`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -81,7 +97,7 @@ const Dashboard = () => {
         });
         if (!transRes.ok) throw new Error("Failed to fetch transactions");
         const transData = await transRes.json();
-        setTransactions(transData.slice(0, 3)); // Show only 3 recent transactions
+        setTransactions(transData.slice(0, 3));
       } catch (err) {
         setError(err.message);
         if (err.message.includes("401") || err.message.includes("403")) {
@@ -93,7 +109,6 @@ const Dashboard = () => {
     fetchData();
   }, [navigate]);
 
-  // WebSocket for real-time updates
   useEffect(() => {
     socket.on("balanceUpdate", (data) => {
       if (data.userId === userData?._id) {
@@ -119,14 +134,12 @@ const Dashboard = () => {
     };
   }, [userData]);
 
-  // Navigation Handlers
   const handleNavigation = (path) => {
     navigate(path);
   };
 
   return (
     <div>
-      {/* Blue Header Section */}
       <div className="bg-blue-800 h-40 p-6">
         <div className="container mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -186,7 +199,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Account & Card Section */}
       <div className="container mx-auto px-6 mt-6">
         <div className="bg-white rounded-lg shadow-lg p-4">
           <div className="flex items-center justify-between mb-4">
@@ -241,7 +253,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Four Main Section Boxes */}
       <div className="container mx-auto px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
@@ -346,7 +357,7 @@ const Dashboard = () => {
             </div>
             <div className="mt-4 text-center">
               <button
-                onClick={() => handleNavigation("/transactions")}
+                onClick={() => {}}
                 className="text-blue-600 text-sm font-medium hover:underline hover:text-blue-800 transition-colors"
               >
                 View all transactions
@@ -448,6 +459,31 @@ const Dashboard = () => {
             <div className="mt-4 text-center">
               <button className="text-blue-600 text-sm font-medium hover:underline">
                 View all deals
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 lg:col-span-2">
+            <div className="flex items-center space-x-3 mb-4">
+              <LineChart className="h-6 w-6 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-800">
+                Investment Insights
+              </h2>
+            </div>
+            <div className="space-y-4">
+              {investmentInsights.map((insight, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                >
+                  <h3 className="font-medium mb-2">{insight.title}</h3>
+                  <p className="text-sm text-gray-700">{insight.tip}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 text-center">
+              <button className="text-blue-600 text-sm font-medium hover:underline">
+                Explore more insights
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import  { useState, useEffect } from "react"; // Import useEffect
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   User,
@@ -14,21 +14,23 @@ import {
   Phone,
   Home,
 } from "lucide-react";
-import Footer from "../component/Footer"; // Assuming you have a Footer component
-import Navbar from "../component/Navbar"; // Assuming you have a Navbar component
-import axios from "axios"; // For form submission
-import { motion, AnimatePresence } from "framer-motion"; // Import motion and AnimatePresence
-import { useInView } from "react-intersection-observer"; // Import useInView
-import { HashLoader } from "react-spinners"; // Import a loader component
-import PropTypes from "prop-types"; // Keep PropTypes for prop validation
+import Footer from "../component/Footer";
+import Navbar from "../component/Navbar";
+import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
+import { useInView } from "react-intersection-observer";
+import { HashLoader } from "react-spinners";
+import PropTypes from "prop-types";
 
-// Placeholder images (replace with actual paths in src/assets/)
-import personalHero from "../assets/personalHero.jpg"; // Hero background
-import checkingImg from "../assets/firstbank.png"; // Checking account
-import savingsImg from "../assets/savingsImg.jpg"; // Savings account
-import investmentImg from "../assets/investmentImg.jpg"; // Investment account
-import perksBg from "../assets/perksBg.jpg"; // Perks background
-import formBg from "../assets/agloans.png"; // Form side image
+import personalHero from "../assets/personalHero.jpg";
+import checkingImg from "../assets/firstbank.png";
+import savingsImg from "../assets/savingsImg.jpg";
+import investmentImg from "../assets/investmentImg.jpg";
+import perksBg from "../assets/perksBg.jpg";
+import formBg from "../assets/agloans.png";
+
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
 
 const Personal = () => {
   const [formData, setFormData] = useState({
@@ -41,18 +43,17 @@ const Personal = () => {
     nationality: "",
     username: "",
     password: "",
-    accountType: "checking", // Default to checking for personal
+    accountType: "checking",
   });
   const [registrationMessage, setRegistrationMessage] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true); // State for overall page loading
+  const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate page loading
     const timer = setTimeout(() => {
       setPageLoading(false);
-    }, 1000); // Simulate a 1 second load time
+    }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -70,9 +71,9 @@ const Personal = () => {
     setRegistrationError("");
 
     try {
-      const response = await axios.post("http://localhost:5000/api/register", {
+      const response = await axios.post(`${API_BASE_URL}/api/register`, {
         ...formData,
-        accounts: [{ type: formData.accountType, balance: 0 }], // Send account type for registration
+        accounts: [{ type: formData.accountType, balance: 0 }],
       });
       setRegistrationMessage(response.data.message);
       setFormData({
@@ -98,7 +99,6 @@ const Personal = () => {
     }
   };
 
-  // useInView hooks for scroll animations
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
@@ -116,13 +116,12 @@ const Personal = () => {
     threshold: 0.1,
   });
 
-  // Animation variants for staggered reveal of cards/items
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1, // Delay between children animations
+        staggerChildren: 0.1,
       },
     },
   };
@@ -143,7 +142,7 @@ const Personal = () => {
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key="personal-page" // Unique key for this page
+        key="personal-page"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
@@ -152,13 +151,13 @@ const Personal = () => {
       >
         <Navbar />
 
-        {/* Hero Section */}
         <motion.section
           ref={heroRef}
           initial={{ opacity: 0, y: 50 }}
           animate={heroInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8 }}
-          className="relative h-[50vh] pt-20 md:h-[65vh] bg-cover bg-center flex items-center justify-center text-white"
+         className="relative min-h-[60vh] md:h-[70vh] flex items-center justify-center text-white pt-24 md:pt-0"
+
           style={{
             backgroundImage: personalHero
               ? `url(${personalHero})`
@@ -199,7 +198,6 @@ const Personal = () => {
           </div>
         </motion.section>
 
-        {/* Account Types Section */}
         <motion.section
           ref={accountsRef}
           initial="hidden"
@@ -255,7 +253,6 @@ const Personal = () => {
           </div>
         </motion.section>
 
-        {/* Banking Perks Section */}
         <motion.section
           ref={perksRef}
           initial="hidden"
@@ -319,7 +316,6 @@ const Personal = () => {
           </div>
         </motion.section>
 
-        {/* Create Account Form Section */}
         <motion.section
           id="create-account-form"
           ref={formRef}
@@ -564,10 +560,9 @@ const Personal = () => {
   );
 };
 
-// Helper Components for Personal Page
 const AccountTypeCard = ({ icon, image, title, description, perks }) => (
   <motion.div
-    whileHover={{ scale: 1.03, y: -5 }} // Hover effect for account type cards
+    whileHover={{ scale: 1.03, y: -5 }}
     transition={{ type: "spring", stiffness: 300 }}
     className="bg-gray-50 p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-300 flex flex-col h-full"
   >
@@ -605,7 +600,7 @@ AccountTypeCard.propTypes = {
 
 const PerkCard = ({ icon, title, description }) => (
   <motion.div
-    whileHover={{ scale: 1.03, y: -5 }} // Hover effect for perk cards
+    whileHover={{ scale: 1.03, y: -5 }}
     transition={{ type: "spring", stiffness: 300 }}
     className="bg-white p-6 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center h-full"
   >

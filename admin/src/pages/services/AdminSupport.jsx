@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MessageSquare, ArrowRight } from "lucide-react";
-
 import axios from "axios";
 import io from "socket.io-client";
 
-const socket = io("http://localhost:5000", {
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
+const socket = io(API_BASE_URL, {
   auth: { token: localStorage.getItem("token") },
 });
 
@@ -29,14 +31,13 @@ const AdminSupport = () => {
     const fetchMessages = async () => {
       try {
         const response = await axios.get(
-          "http://localhost:5000/api/admin/support-messages",
+          `${API_BASE_URL}/api/admin/support-messages`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
         setMessages(response.data);
       } catch (err) {
-        console.error("Fetch support messages error:", err);
         setError(
           err.response?.data?.message || "Error fetching support messages"
         );
@@ -70,14 +71,21 @@ const AdminSupport = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "http://localhost:5000/api/admin/support/reply",
+        `${API_BASE_URL}/api/admin/support/reply`,
         { messageId, reply: reply.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setReply("");
       setSelectedMessageId(null);
+
+      const response = await axios.get(
+        `${API_BASE_URL}/api/admin/support-messages`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setMessages(response.data);
     } catch (err) {
-      console.error("Send reply error:", err);
       setError(err.response?.data?.message || "Error sending reply");
       if ([401, 403].includes(err.response?.status)) {
         navigate("/login");
@@ -88,10 +96,10 @@ const AdminSupport = () => {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto min-h-screen">
       <Link
-        to="/admin/dashboard"
-        className="mb-6 text-blue-600 flex items-center gap-2 hover:text-blue-700"
+        to="/dashboard"
+        className="mb-6 text-blue-600 flex items-center gap-2 hover:text-blue-700 text-sm sm:text-base"
       >
         <ArrowRight className="w-4 h-4 rotate-180" /> Back to Admin Dashboard
       </Link>
@@ -101,34 +109,36 @@ const AdminSupport = () => {
           <div className="bg-blue-100 p-2 rounded-full">
             <MessageSquare className="w-5 h-5 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-semibold text-gray-800">
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">
             Support Messages
           </h2>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
             {error}
           </div>
         )}
 
         <div className="space-y-4">
           {messages.length === 0 && (
-            <p className="text-gray-600 text-center">
+            <p className="text-gray-600 text-center text-sm sm:text-base">
               No support messages available.
             </p>
           )}
           {messages.map((msg) => (
-            <div key={msg._id} className="border-b pb-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-gray-800 font-medium">
+            <div key={msg._id} className="border-b pb-4 last:border-b-0">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <div className="mb-2 sm:mb-0">
+                  <p className="text-gray-800 font-medium text-sm sm:text-base break-words">
                     {msg.sender === "client"
                       ? `${msg.username} (${msg.email})`
                       : "Admin"}
                   </p>
-                  <p className="text-gray-600">{msg.message}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-gray-600 text-sm sm:text-base break-words">
+                    {msg.message}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
                     {new Date(msg.timestamp).toLocaleString("en-US", {
                       year: "numeric",
                       month: "numeric",
@@ -142,26 +152,26 @@ const AdminSupport = () => {
                 {msg.sender === "client" && msg.status === "open" && (
                   <button
                     onClick={() => setSelectedMessageId(msg._id)}
-                    className="text-blue-600 hover:underline"
+                    className="text-blue-600 hover:underline text-sm sm:text-base flex-shrink-0"
                   >
                     Reply
                   </button>
                 )}
               </div>
               {selectedMessageId === msg._id && (
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={reply}
                     onChange={handleReplyChange}
                     placeholder="Type your reply..."
                     disabled={isLoading}
-                    className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full border px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
                   />
                   <button
                     onClick={() => handleSendReply(msg._id)}
                     disabled={isLoading}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base flex-shrink-0"
                   >
                     {isLoading ? "Sending..." : "Send Reply"}
                   </button>

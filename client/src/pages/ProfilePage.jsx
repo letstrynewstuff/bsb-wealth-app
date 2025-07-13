@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 import { HiUserCircle } from "react-icons/hi";
+
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
 
 const ProfilePage = () => {
   const [profile, setProfile] = useState(null);
@@ -17,12 +20,9 @@ const ProfilePage = () => {
           navigate("/login");
           return;
         }
-        const response = await axios.get(
-          "http://localhost:5000/api/client/profile",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
+        const response = await axios.get(`${API_BASE_URL}/api/user`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setProfile(response.data);
       } catch (err) {
         console.error("Error fetching profile:", err);
@@ -47,10 +47,8 @@ const ProfilePage = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-between bg-gray-100">
       <div className="flex flex-col items-center w-full max-w-2xl mx-auto p-6">
-        {/* Profile Icon */}
         <HiUserCircle className="w-32 h-32 text-blue-600 mb-6" />
 
-        {/* User Details */}
         <div className="bg-white shadow-md rounded-lg p-6 w-full text-center">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">
             {profile.firstName} {profile.lastName}
@@ -90,14 +88,13 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Accounts */}
         <div className="bg-white shadow-md rounded-lg p-6 w-full mt-6 text-center">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Accounts</h2>
           {profile.accounts.length > 0 ? (
             <div className="space-y-4">
               {profile.accounts.map((account, index) => (
                 <div
-                  key={index}
+                  key={account.accountNumber || index}
                   className="border border-gray-200 rounded-md p-4 text-gray-600"
                 >
                   <p>
@@ -105,9 +102,11 @@ const ProfilePage = () => {
                     {account.type.charAt(0).toUpperCase() +
                       account.type.slice(1)}
                   </p>
-                  <p>
-                    <strong>Account Number:</strong> {account.accountNumber}
-                  </p>
+                  {account.accountNumber && (
+                    <p>
+                      <strong>Account Number:</strong> {account.accountNumber}
+                    </p>
+                  )}
                   <p>
                     <strong>Balance:</strong> ${account.balance.toFixed(2)}
                   </p>
@@ -134,7 +133,6 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Bank Footer */}
       <footer className="bg-blue-800 text-white w-full py-6 text-center">
         <p className="text-lg font-semibold">Bennington State Bank</p>
         <p className="text-sm">123 Bank Street, Bennington, USA</p>

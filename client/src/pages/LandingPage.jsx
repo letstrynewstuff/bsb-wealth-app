@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"; // Import useEffect
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ChevronRight,
@@ -23,7 +23,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import axios from "axios";
-import { HashLoader } from "react-spinners"; // Import a loader component
+import { HashLoader } from "react-spinners";
 
 import homeImg from "../assets/homeimg.png";
 import heroImg from "../assets/heroimg.png";
@@ -34,6 +34,9 @@ import Footer from "../component/Footer";
 import Navbar from "../component/Navbar";
 import NavigationLinks from "../component/NavigationLinks";
 import SocialMedia from "../component/SocialMedia";
+
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
 
 const StarRating = ({ rating }) => {
   return (
@@ -70,14 +73,13 @@ const LandingPage = () => {
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true); // State for overall page loading
+  const [pageLoading, setPageLoading] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
-    // Simulate page loading
     const timer = setTimeout(() => {
       setPageLoading(false);
-    }, 1500); // Simulate a 1.5 second load time
+    }, 1500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -97,7 +99,7 @@ const LandingPage = () => {
 
     try {
       const response = await axios.post(
-        "http://localhost:3000/api/login",
+        `${API_BASE_URL}/api/client/login`, // Corrected URL and endpoint
         loginData
       );
       const { token, role } = response.data;
@@ -142,7 +144,6 @@ const LandingPage = () => {
     },
   ];
 
-  // useInView hooks for scroll animations - specific refs for each section
   const [homeownershipRef, homeownershipInView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
@@ -184,13 +185,12 @@ const LandingPage = () => {
     threshold: 0.1,
   });
 
-  // Animation variants for staggered reveal of cards/items
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1, // Delay between children animations
+        staggerChildren: 0.1,
       },
     },
   };
@@ -220,15 +220,14 @@ const LandingPage = () => {
       >
         <Navbar />
 
-        {/* Hero Section */}
-        <div className="relative min-h-[60vh] md:h-[70vh] flex items-center text-white">
+        <div className="relative min-h-[60vh] md:h-[70vh] flex items-center justify-center text-white pt-24 md:pt-0">
           <div
             className="absolute inset-0 bg-cover bg-center"
             style={{ backgroundImage: `url(${heroImg})` }}
           ></div>
 
-          <div className="relative z-10 flex flex-col w-full max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="w-full md:w-1/2 py-12 md:py-0">
+          <div className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center md:items-start justify-between py-12 space-y-10 md:space-y-0">
+            <div className="w-full md:w-1/2 text-center md:text-left">
               <motion.h1
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -253,56 +252,56 @@ const LandingPage = () => {
                 Apply Now
               </motion.button>
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 100 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              className="w-full md:w-80 bg-gray-200 text-black p-6 rounded-lg shadow-lg"
+            >
+              <h3 className="text-lg sm:text-xl font-semibold mb-4">
+                Online Banking Login
+              </h3>
+              {loginError && (
+                <div className="mb-4 p-2 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+                  {loginError}
+                </div>
+              )}
+              <form onSubmit={handleLoginSubmit}>
+                <input
+                  type="text"
+                  name="username"
+                  placeholder="Enter your username"
+                  className="w-full p-2 mb-4 border rounded-md"
+                  value={loginData.username}
+                  onChange={handleLoginChange}
+                  required
+                  disabled={isLoading}
+                />
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Enter your password"
+                  className="w-full p-2 mb-4 border rounded-md"
+                  value={loginData.password}
+                  onChange={handleLoginChange}
+                  required
+                  disabled={isLoading}
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Logging in..." : "Login"}
+                </button>
+              </form>
+            </motion.div>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="absolute bottom-10 right-4 sm:right-10 bg-gray-200 text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-xs sm:w-80"
-          >
-            <h3 className="text-lg sm:text-xl font-semibold mb-4">
-              Online Banking Login
-            </h3>
-            {loginError && (
-              <div className="mb-4 p-2 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
-                {loginError}
-              </div>
-            )}
-            <form onSubmit={handleLoginSubmit}>
-              <input
-                type="text"
-                name="username"
-                placeholder="Enter your username"
-                className="w-full p-2 mb-4 border rounded-md"
-                value={loginData.username}
-                onChange={handleLoginChange}
-                required
-                disabled={isLoading}
-              />
-              <input
-                type="password"
-                name="password"
-                placeholder="Enter your password"
-                className="w-full p-2 mb-4 border rounded-md"
-                value={loginData.password}
-                onChange={handleLoginChange}
-                required
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                className="w-full bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isLoading}
-              >
-                {isLoading ? "Logging in..." : "Login"}
-              </button>
-            </form>
-          </motion.div>
           <div className="absolute bottom-0 left-0 w-full h-[20px] bg-blue-900"></div>
         </div>
 
-        {/* Homeownership Grant Section */}
         <motion.div
           ref={homeownershipRef}
           initial={{ opacity: 0, y: 50 }}
@@ -350,7 +349,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Wealth Management Section */}
         <motion.div
           ref={wealthSectionRef}
           initial={{ opacity: 0, scale: 0.9 }}
@@ -378,7 +376,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Wealth Management Features */}
         <motion.div
           ref={wealthFeaturesRef}
           initial="hidden"
@@ -417,7 +414,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Features Section (Why Choose Us) */}
         <motion.div
           ref={whyChooseUsRef}
           initial="hidden"
@@ -455,7 +451,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Products Section (Banking Solutions) */}
         <motion.div
           ref={bankingSolutionsRef}
           initial="hidden"
@@ -496,7 +491,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Customer Reviews Section */}
         <motion.div
           ref={customerReviewsRef}
           initial="hidden"
@@ -518,7 +512,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* CTA Section */}
         <motion.div
           ref={ctaSectionRef}
           initial={{ opacity: 0, y: 50 }}
@@ -553,7 +546,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* AG Section */}
         <motion.div
           ref={agSectionRef}
           initial={{ opacity: 0, y: 50 }}
@@ -589,7 +581,6 @@ const LandingPage = () => {
           </motion.div>
         </motion.div>
 
-        {/* Committed to you */}
         <motion.div
           ref={committedRef}
           initial={{ opacity: 0, y: 50 }}
@@ -625,7 +616,6 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Community Section */}
         <motion.div
           ref={communitySectionRef}
           initial={{ opacity: 0, y: 50 }}
@@ -668,20 +658,16 @@ const LandingPage = () => {
           </div>
         </motion.div>
 
-        {/* Social Media Section */}
         <SocialMedia />
 
-        {/* Navigation Section */}
         <NavigationLinks />
 
-        {/* Footer */}
         <Footer />
       </motion.div>
     </AnimatePresence>
   );
 };
 
-// Helper Components
 const FeatureCard = ({ icon, title, description }) => (
   <motion.div
     whileHover={{ scale: 1.03, y: -5 }}

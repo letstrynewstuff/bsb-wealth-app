@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Landmark } from "lucide-react";
 import axios from "axios";
 import io from "socket.io-client";
 
-// Initialize socket
-const socket = io("http://localhost:5000", {
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
+const socket = io(API_BASE_URL, {
   auth: { token: localStorage.getItem("token") },
 });
 
@@ -13,7 +15,6 @@ const Ach = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     accountType: "",
-    accountNumber: "",
     recipientAccountNumber: "",
     recipientName: "",
     recipientAccountType: "",
@@ -30,6 +31,8 @@ const Ach = () => {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
 
+  const otpInputRefs = useRef([]);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -41,10 +44,14 @@ const Ach = () => {
 
     const fetchAccounts = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/account", {
+        const res = await axios.get(`${API_BASE_URL}/api/account`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setAccounts(res.data.accounts.filter((acc) => acc.status === "active"));
+        setAccounts(
+          res.data.accounts.filter(
+            (acc) => acc.status === "active" && acc.accountNumber
+          )
+        );
       } catch (err) {
         console.error("Fetch account error:", err);
         setError("Failed to fetch accounts.");
@@ -58,8 +65,13 @@ const Ach = () => {
 
     socket.on("transactionUpdate", (tx) => {
       if (tx.userId === userData?.id) {
-        setSuccess("Transfer successfully initiated.");
-        setShowOtpPopup(false);
+        // This message will appear after OTP verification and successful transaction
+        setSuccess(
+          "Your ACH transfer has been successfully initiated. It will typically take 2-5 working days to process."
+        );
+        setShowOtpPopup(false); // Close OTP popup
+        // Re-fetch accounts to update balances
+        fetchAccounts();
       }
     });
 
@@ -70,6 +82,7 @@ const Ach = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (error) setError("");
+    if (success) setSuccess(""); // Clear success message on new input
   };
 
   const handleOtpChange = (index, value) => {
@@ -77,10 +90,18 @@ const Ach = () => {
       const newOtp = [...otp];
       newOtp[index] = value;
       setOtp(newOtp);
-      if (value && index < 5) {
-        document.getElementById(`otp-${index + 1}`)?.focus();
+      if (value && index < 5 && otpInputRefs.current[index + 1]) {
+        otpInputRefs.current[index + 1].focus();
       }
       if (otpError) setOtpError("");
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && otp[index] === "") {
+      if (index > 0 && otpInputRefs.current[index - 1]) {
+        otpInputRefs.current[index - 1].focus();
+      }
     }
   };
 
@@ -88,7 +109,35 @@ const Ach = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setOtpError("");
     setIsLoading(true);
+
+    // Frontend validation
+    if (
+      !formData.accountType ||
+      !formData.recipientAccountNumber ||
+      !formData.recipientName ||
+      !formData.recipientAccountType ||
+      !formData.recipientBank ||
+      !formData.amount
+    ) {
+      setError("Please fill in all required fields.");
+      setIsLoading(false);
+      return;
+    }
+    if (parseFloat(formData.amount) <= 0) {
+      setError("Amount must be positive.");
+      setIsLoading(false);
+      return;
+    }
+    if (
+      formData.recipientAccountNumber.length !== 10 ||
+      !/^\d+$/.test(formData.recipientAccountNumber)
+    ) {
+      setError("Recipient Account Number must be a 10-digit number.");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const token = localStorage.getItem("token");
@@ -104,20 +153,30 @@ const Ach = () => {
 
       const payload = {
         ...formData,
-        accountNumber: selectedAccount.accountNumber,
+        accountNumber: selectedAccount.accountNumber, // Add sender's account number
         amount: parseFloat(formData.amount),
       };
 
-      await axios.post("http://localhost:5000/api/client/transfers", payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Call the initiate transfer endpoint
+      await axios.post(
+        `${API_BASE_URL}/api/client/transfers/initiate`,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
-      setSuccess("OTP sent to your email.");
+      setSuccess(
+        "OTP has been sent to your registered email. Please enter it to complete the transfer."
+      );
       setShowOtpPopup(true);
+      setOtp(["", "", "", "", "", ""]); // Clear OTP input fields
     } catch (err) {
-      console.error("ACH transfer error:", err);
+      console.error("ACH transfer initiation error:", err);
       setError(err.response?.data?.message || "Error initiating transfer.");
       if ([401, 403].includes(err.response?.status)) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("userData");
         navigate("/login");
       }
     } finally {
@@ -134,19 +193,23 @@ const Ach = () => {
       const token = localStorage.getItem("token");
       const otpCode = otp.join("");
 
+      if (otpCode.length !== 6) {
+        setOtpError("Please enter a 6-digit OTP.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Call the verify OTP endpoint
       await axios.post(
-        "http://localhost:5000/api/client/verify-otp",
+        `${API_BASE_URL}/api/client/transfers/verify-otp`,
         { otp: otpCode },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setSuccess("Transaction successful!");
-      setOtp(["", "", "", "", "", ""]);
-      setShowOtpPopup(false);
-
+      // Success message will be handled by the socket.on("transactionUpdate") listener
+      // Reset form and close popup
       setFormData({
         accountType: "",
-        accountNumber: "",
         recipientAccountNumber: "",
         recipientName: "",
         recipientAccountType: "",
@@ -157,9 +220,11 @@ const Ach = () => {
       setOtp(["", "", "", "", "", ""]);
       setShowOtpPopup(false);
     } catch (err) {
-      console.error("OTP error:", err);
+      console.error("OTP verification error:", err);
       setOtpError(err.response?.data?.message || "OTP verification failed.");
       if ([401, 403].includes(err.response?.status)) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("userData");
         navigate("/login");
       }
     } finally {
@@ -168,194 +233,272 @@ const Ach = () => {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <Link
-        to="/dashboard/transfer"
-        className="mb-6 text-blue-600 flex items-center gap-2 hover:text-blue-700"
-      >
-        <ArrowRight className="w-4 h-4 rotate-180" /> Back to transfer options
-      </Link>
+    <div className="p-6 flex justify-center items-center min-h-screen bg-gray-100">
+      <div className="w-full max-w-2xl">
+        <Link
+          to="/dashboard/transfer"
+          className="mb-6 text-blue-600 hover:text-blue-700 flex items-center gap-2"
+        >
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          Back to transfer options
+        </Link>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-blue-100 p-2 rounded-full">
-            <Landmark className="w-5 h-5 text-blue-600" />
+        <div className="bg-white rounded-lg shadow-md">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-100 p-2 rounded-full">
+                <Landmark className="w-5 h-5 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-800">
+                ACH Transfer
+              </h2>
+            </div>
           </div>
-          <h2 className="text-2xl font-semibold text-gray-800">ACH Transfer</h2>
-        </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {error}
-          </div>
-        )}
-        {success && !showOtpPopup && (
-          <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">
-            {success}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <select
-            name="accountType"
-            value={formData.accountType}
-            onChange={handleChange}
-            required
-            className="w-full border px-3 py-2 rounded"
-          >
-            <option value="">Select account type</option>
-            {accounts.map((acc) => (
-              <option key={acc._id} value={acc.type}>
-                {acc.type.charAt(0).toUpperCase() + acc.type.slice(1)} (Balance:
-                ${acc.balance})
-              </option>
-            ))}
-          </select>
-
-          <input
-            name="recipientAccountNumber"
-            type="text"
-            placeholder="Recipient Account Number"
-            value={formData.recipientAccountNumber}
-            onChange={handleChange}
-            required
-            className="w-full border px-3 py-2 rounded"
-          />
-
-          <input
-            name="recipientName"
-            type="text"
-            placeholder="Recipient Name"
-            value={formData.recipientName}
-            onChange={handleChange}
-            required
-            className="w-full border px-3 py-2 rounded"
-          />
-
-          <input
-            name="recipientBank"
-            type="text"
-            placeholder="Recipient Bank"
-            value={formData.recipientBank}
-            onChange={handleChange}
-            required
-            className="w-full border px-3 py-2 rounded"
-          />
-
-          <select
-            name="recipientAccountType"
-            value={formData.recipientAccountType}
-            onChange={handleChange}
-            required
-            className="w-full border px-3 py-2 rounded"
-          >
-            <option value="">Recipient Account Type</option>
-            <option value="checking">Checking</option>
-            <option value="savings">Savings</option>
-            <option value="debitcard">Debit Card</option>
-            <option value="investment">Investment</option>
-          </select>
-
-          <input
-            name="amount"
-            type="number"
-            step="0.01"
-            placeholder="Amount"
-            value={formData.amount}
-            onChange={handleChange}
-            required
-            className="w-full border px-3 py-2 rounded"
-          />
-
-          <input
-            name="description"
-            type="text"
-            placeholder="Description (optional)"
-            value={formData.description}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-          >
-            {isLoading ? "Processing..." : "Submit ACH Transfer"}
-          </button>
-        </form>
-      </div>
-
-      {showOtpPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Enter OTP
-            </h3>
-            {otpError && (
-              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-                {otpError}
+          <div className="p-6">
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+                {error}
               </div>
             )}
-            <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <div className="flex justify-center gap-2">
-                {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    id={`otp-${i}`}
-                    type="text"
-                    maxLength="1"
-                    value={digit}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    className="w-10 h-10 text-center border rounded"
-                    required
-                  />
-                ))}
+            {success && !showOtpPopup && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-600 rounded-lg text-sm">
+                {success}
               </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  From Account Type
+                </label>
+                <select
+                  name="accountType"
+                  value={formData.accountType}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  required
+                  disabled={isLoading}
+                >
+                  <option value="">Select account type</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.accountNumber} value={acc.type}>
+                      {acc.type.charAt(0).toUpperCase() + acc.type.slice(1)}{" "}
+                      (Acct: {acc.accountNumber}) (Balance: $
+                      {acc.balance.toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Recipient Account Number
+                </label>
+                <input
+                  name="recipientAccountNumber"
+                  type="text"
+                  placeholder="Enter 10-digit Account Number"
+                  value={formData.recipientAccountNumber}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  required
+                  maxLength="10"
+                  pattern="\d{10}"
+                  title="Recipient Account Number must be a 10-digit number."
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Recipient Name
+                </label>
+                <input
+                  name="recipientName"
+                  type="text"
+                  placeholder="Enter Recipient Name"
+                  value={formData.recipientName}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Recipient Bank
+                </label>
+                <input
+                  name="recipientBank"
+                  type="text"
+                  placeholder="Enter Recipient Bank Name"
+                  value={formData.recipientBank}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Recipient Account Type
+                </label>
+                <select
+                  name="recipientAccountType"
+                  value={formData.recipientAccountType}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  required
+                  disabled={isLoading}
+                >
+                  <option value="">Select account type</option>
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                  <option value="debitcard">Debit Card</option>
+                  <option value="investment">Investment</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Amount
+                </label>
+                <input
+                  name="amount"
+                  type="number"
+                  placeholder="0.00"
+                  value={formData.amount}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  required
+                  min="0.01"
+                  step="0.01"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Description (Optional)
+                </label>
+                <input
+                  name="description"
+                  type="text"
+                  placeholder="Enter transfer description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                  disabled={isLoading}
+                />
+              </div>
+
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                disabled={isLoading}
+                className="w-full px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Verify OTP
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowOtpPopup(false)}
-                className="w-full mt-2 text-gray-600 bg-gray-200 py-2 rounded hover:bg-gray-300"
-              >
-                Cancel
+                {isLoading ? "Initiating Transfer..." : "Make ACH Transfer"}
               </button>
             </form>
           </div>
         </div>
-      )}
 
-      {success === "Transaction successful!" && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-            <h2 className="text-2xl font-bold text-blue-700 mb-4">
-              Bennington State Bank
-            </h2>
-            <p className="text-gray-800 mb-3">
-              We are pleased to confirm that your transaction with{" "}
-              <strong className="text-blue-700">Bennington State Bank</strong>{" "}
-              has been successfully completed.
-            </p>
-            <p className="text-gray-600 mb-6">
-              The transfer has been processed securely and efficiently, and all
-              details have been updated accordingly. <br />
-              Should you have any questions or require further assistance,
-              please do not hesitate to contact our support team.
-            </p>
-            <button
-              onClick={() => setSuccess("")}
-              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
-            >
-              Close
-            </button>
+        {showOtpPopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 text-center">
+                Enter OTP
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 text-center">
+                An OTP has been sent to your registered email. Please enter the
+                6-digit code below.
+              </p>
+              {otpError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
+                  {otpError}
+                </div>
+              )}
+              {success && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-600 rounded-lg text-sm text-center">
+                  {success}
+                </div>
+              )}
+              <form onSubmit={handleOtpSubmit} className="space-y-4">
+                <div className="flex gap-2 justify-center">
+                  {otp.map((digit, index) => (
+                    <input
+                      key={index}
+                      id={`otp-${index}`}
+                      type="text"
+                      maxLength="1"
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                      ref={(el) => (otpInputRefs.current[index] = el)}
+                      className="w-12 h-12 text-center text-lg border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+                      required
+                      disabled={isLoading}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading || otp.join("").length !== 6}
+                  className="w-full px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading
+                    ? "Verifying..."
+                    : "Verify OTP & Complete Transfer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOtpPopup(false);
+                    setOtp(["", "", "", "", "", ""]);
+                    setOtpError("");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="w-full px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none"
+                >
+                  Cancel
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {success ===
+          "Your ACH transfer has been successfully initiated. It will typically take 2-5 working days to process." && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+              <h2 className="text-2xl font-bold text-blue-700 mb-4">
+                Bennington State Bank
+              </h2>
+              <p className="text-gray-800 mb-3">
+                We are pleased to confirm that your transaction with{" "}
+                <strong className="text-blue-700">Bennington State Bank</strong>{" "}
+                has been successfully completed.
+              </p>
+              <p className="text-gray-600 mb-6">
+                The transfer has been processed securely and efficiently, and
+                all details have been updated accordingly. <br />
+                Should you have any questions or require further assistance,
+                please do not hesitate to contact our support team.
+              </p>
+              <button
+                onClick={() => setSuccess("")}
+                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -89,7 +89,8 @@ const Business = () => {
           initial={{ opacity: 0, y: 50 }}
           animate={heroInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8 }}
-          className="relative h-[50vh] pt-20 md:h-[65vh] bg-cover bg-center flex items-center justify-center text-white"
+          className="relative min-h-[60vh] md:h-[70vh] flex items-center justify-center text-white pt-24 md:pt-0"
+
           style={{
             backgroundImage: businessHero
               ? `url(${businessHero})`

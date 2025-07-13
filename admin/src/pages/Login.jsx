@@ -2,23 +2,29 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield } from "lucide-react";
 
+
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false); 
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true); 
 
     try {
-      const res = await fetch("http://localhost:5000/api/login", {
+      const res = await fetch(`${API_BASE_URL}/api/admin/login`, {
+        
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include", // For cookies, if used
         body: JSON.stringify({ username, password }),
       });
 
@@ -28,17 +34,32 @@ const Login = () => {
         throw new Error(data.message || "Login failed");
       }
 
-      if (data.role !== "admin") {
+      
+      if (data.user.role !== "admin") {
         setError("Access denied: Admin credentials required.");
+        setIsLoading(false); // Reset loading state
         return;
       }
 
+      
       localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
+      
+      localStorage.setItem(
+        "userData",
+        JSON.stringify({
+          id: data.user.id,
+          username: data.user.username,
+          firstName: data.user.firstName,
+          role: data.user.role,
+        })
+      );
 
-      navigate("/"); // Redirect to dashboard as per App.jsx
+      // Redirect to the admin dashboard
+      navigate("/admin/dashboard");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsLoading(false); // Reset loading state
     }
   };
 
@@ -70,6 +91,7 @@ const Login = () => {
               className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
               placeholder="Enter username"
               required
+              disabled={isLoading} 
             />
           </div>
           <div>
@@ -87,13 +109,15 @@ const Login = () => {
               className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
               placeholder="Enter password"
               required
+              disabled={isLoading} 
             />
           </div>
           <button
             type="submit"
-            className="w-full bg-blue-700 hover:bg-blue-800 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-blue-700 hover:bg-blue-800 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading} 
           >
-            Login
+            {isLoading ? "Logging in..." : "Login"} {/* Show loading text */}
           </button>
         </form>
       </div>

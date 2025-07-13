@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserPlus, PlusCircle, MinusCircle } from "lucide-react"; // Added PlusCircle and MinusCircle icons
+import { UserPlus, PlusCircle, MinusCircle } from "lucide-react";
+
+const API_BASE_URL =
+  import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
 
 const AddClient = () => {
   const [formData, setFormData] = useState({
@@ -13,8 +16,7 @@ const AddClient = () => {
     nationality: "",
     username: "",
     password: "",
-    // This will now be an array to hold multiple accounts
-    accounts: [{ type: "checking", balance: "" }], // Default with one checking account
+    accounts: [{ type: "checking", balance: "" }],
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -43,7 +45,7 @@ const AddClient = () => {
   const handleAddAccount = () => {
     setFormData((prev) => ({
       ...prev,
-      accounts: [...prev.accounts, { type: "checking", balance: "" }], // Add a new default account
+      accounts: [...prev.accounts, { type: "checking", balance: "" }],
     }));
     setError("");
     setSuccess("");
@@ -51,7 +53,6 @@ const AddClient = () => {
 
   const handleRemoveAccount = (index) => {
     if (formData.accounts.length > 1) {
-      // Ensure at least one account remains
       const newAccounts = formData.accounts.filter((_, i) => i !== index);
       setFormData((prev) => ({ ...prev, accounts: newAccounts }));
       setError("");
@@ -74,19 +75,17 @@ const AddClient = () => {
         return;
       }
 
-      // Validate accounts before sending
       const validAccounts = formData.accounts
         .map((acc) => ({
           type: acc.type,
-          balance: parseFloat(acc.balance) || 0, // Ensure balance is a number
+          balance: parseFloat(acc.balance) || 0,
         }))
-        .filter((acc) => acc.type); // Filter out accounts with no type selected
+        .filter((acc) => acc.type);
 
       if (validAccounts.length === 0) {
         throw new Error("Please add at least one account for the client.");
       }
 
-      // Ensure all initial balances are valid numbers if provided
       for (const account of validAccounts) {
         if (isNaN(account.balance)) {
           throw new Error("Initial balance must be a valid number.");
@@ -96,7 +95,7 @@ const AddClient = () => {
         }
       }
 
-      const res = await fetch("http://localhost:5000/api/admin/add-client", {
+      const res = await fetch(`${API_BASE_URL}/api/admin/add-client`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -113,7 +112,7 @@ const AddClient = () => {
           nationality: formData.nationality,
           username: formData.username,
           password: formData.password,
-          accounts: validAccounts, // Send the array of accounts
+          accounts: validAccounts,
         }),
       });
 
@@ -125,7 +124,6 @@ const AddClient = () => {
 
       setSuccess(data.message || "Client added successfully");
       setFormData({
-        // Reset form fields after successful submission
         firstName: "",
         lastName: "",
         email: "",
@@ -135,10 +133,9 @@ const AddClient = () => {
         nationality: "",
         username: "",
         password: "",
-        accounts: [{ type: "checking", balance: "" }], // Reset to one default account
+        accounts: [{ type: "checking", balance: "" }],
       });
     } catch (err) {
-      console.error("Add client submission error:", err);
       setError(err.message);
       if (err.message.includes("403") || err.message.includes("401")) {
         navigate("/login");
@@ -149,19 +146,21 @@ const AddClient = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
-      <div className="flex items-center mb-6">
-        <UserPlus className="w-8 h-8 text-green-700 mr-2" />
-        <h2 className="text-2xl font-semibold text-gray-900">Add Client</h2>
+    <div className="p-4 sm:p-6 bg-gray-100 min-h-screen">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center mb-6">
+        <UserPlus className="w-7 h-7 sm:w-8 sm:h-8 text-green-700 mr-2 mb-2 sm:mb-0" />
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
+          Add Client
+        </h2>
       </div>
 
       {error && (
-        <div className="mb-4 p-2 bg-red-100 text-red-700 rounded-lg">
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-2 bg-green-100 text-green-700 rounded-lg">
+        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">
           {success}
         </div>
       )}
@@ -182,7 +181,7 @@ const AddClient = () => {
                 type="text"
                 value={formData.firstName}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Enter first name"
                 required
                 disabled={isLoading}
@@ -201,7 +200,7 @@ const AddClient = () => {
                 type="text"
                 value={formData.lastName}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Enter last name"
                 required
                 disabled={isLoading}
@@ -221,7 +220,7 @@ const AddClient = () => {
               type="email"
               value={formData.email}
               onChange={handleInputChange}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Enter email"
               required
               disabled={isLoading}
@@ -240,7 +239,7 @@ const AddClient = () => {
               type="tel"
               value={formData.phone}
               onChange={handleInputChange}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Enter phone number"
               required
               disabled={isLoading}
@@ -258,7 +257,7 @@ const AddClient = () => {
               name="address"
               value={formData.address}
               onChange={handleInputChange}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Enter full address"
               rows="3"
               required
@@ -279,7 +278,7 @@ const AddClient = () => {
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
                 disabled={isLoading}
               />
@@ -297,7 +296,7 @@ const AddClient = () => {
                 type="text"
                 value={formData.nationality}
                 onChange={handleInputChange}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Enter nationality"
                 required
                 disabled={isLoading}
@@ -317,7 +316,7 @@ const AddClient = () => {
               type="text"
               value={formData.username}
               onChange={handleInputChange}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Enter username"
               required
               disabled={isLoading}
@@ -336,16 +335,15 @@ const AddClient = () => {
               type="password"
               value={formData.password}
               onChange={handleInputChange}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Enter password"
               required
               disabled={isLoading}
             />
           </div>
 
-          {/* Dynamic Account Fields */}
           <div className="col-span-1 sm:col-span-2 space-y-4 border p-4 rounded-lg bg-gray-50">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">
               Client Accounts
             </h3>
             {formData.accounts.map((account, index) => (
@@ -362,10 +360,10 @@ const AddClient = () => {
                   </label>
                   <select
                     id={`accountType-${index}`}
-                    name="type" // This name maps to the 'type' property in the account object
+                    name="type"
                     value={account.type}
                     onChange={(e) => handleAccountChange(index, e)}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                     required
                     disabled={isLoading}
                   >
@@ -385,12 +383,12 @@ const AddClient = () => {
                   <div className="flex items-center mt-1">
                     <input
                       id={`initialBalance-${index}`}
-                      name="balance" // This name maps to the 'balance' property in the account object
+                      name="balance"
                       type="number"
                       step="0.01"
                       value={account.balance}
                       onChange={(e) => handleAccountChange(index, e)}
-                      className="flex-grow px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-grow px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
                       placeholder="Enter initial balance"
                       disabled={isLoading}
                     />
@@ -412,7 +410,7 @@ const AddClient = () => {
             <button
               type="button"
               onClick={handleAddAccount}
-              className="mt-4 w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-4 w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               disabled={isLoading}
             >
               <PlusCircle className="w-5 h-5 mr-2" /> Add Another Account
@@ -421,7 +419,7 @@ const AddClient = () => {
 
           <button
             type="submit"
-            className="w-full bg-green-700 hover:bg-green-800 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-green-700 hover:bg-green-800 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-base"
             disabled={isLoading}
           >
             {isLoading ? "Adding Client..." : "Add Client"}
