@@ -1,0 +1,9 @@
+# .gitignore
+.env
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.log
+node_modules/
