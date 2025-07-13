@@ -1444,7 +1444,8 @@ const io = new Server(server, {
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:5173"],
+    origin: ["http://localhost:3000", "http://localhost:5173, https://admin-benningtonstatebkss.vercel.app",
+      "https://benningtonstatebkss.vercel.app"],
     credentials: true,
   })
 );
