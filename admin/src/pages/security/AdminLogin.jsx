@@ -36,7 +36,7 @@ const AdminLogin = () => {
       const { token, user } = response.data;
       localStorage.setItem("token", token);
       localStorage.setItem("userData", JSON.stringify(user));
-      navigate("/dashboard");
+      navigate("/");
     } catch (err) {
       setError(err.response?.data?.message || "Error logging in");
     } finally {
