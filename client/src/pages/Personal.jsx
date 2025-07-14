@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom"; // Import useNavigate
 import {
   User,
   DollarSign,
@@ -33,6 +33,7 @@ const API_BASE_URL =
   import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
 
 const Personal = () => {
+  const navigate = useNavigate(); // Initialize useNavigate
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -99,6 +100,11 @@ const Personal = () => {
     }
   };
 
+  // Function to handle redirection to contact page
+  const handleLearnMoreClick = () => {
+    navigate("/contact");
+  };
+
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
@@ -156,8 +162,7 @@ const Personal = () => {
           initial={{ opacity: 0, y: 50 }}
           animate={heroInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8 }}
-         className="relative min-h-[60vh] md:h-[70vh] flex items-center justify-center text-white pt-24 md:pt-0"
-
+          className="relative min-h-[60vh] md:h-[70vh] flex items-center justify-center text-white pt-24 md:pt-0"
           style={{
             backgroundImage: personalHero
               ? `url(${personalHero})`
@@ -221,6 +226,7 @@ const Personal = () => {
                     "Mobile deposit & alerts",
                     "Debit card with rewards",
                   ]}
+                  onLearnMoreClick={handleLearnMoreClick} // Pass the click handler
                 />
               </motion.div>
               <motion.div variants={itemVariants}>
@@ -234,6 +240,7 @@ const Personal = () => {
                     "Automatic savings transfers",
                     "No monthly service fees",
                   ]}
+                  onLearnMoreClick={handleLearnMoreClick} // Pass the click handler
                 />
               </motion.div>
               <motion.div variants={itemVariants}>
@@ -247,6 +254,7 @@ const Personal = () => {
                     "Diversified portfolio options",
                     "Retirement planning support",
                   ]}
+                  onLearnMoreClick={handleLearnMoreClick} // Pass the click handler
                 />
               </motion.div>
             </div>
@@ -560,7 +568,15 @@ const Personal = () => {
   );
 };
 
-const AccountTypeCard = ({ icon, image, title, description, perks }) => (
+// Modified AccountTypeCard to accept onLearnMoreClick prop
+const AccountTypeCard = ({
+  icon,
+  image,
+  title,
+  description,
+  perks,
+  onLearnMoreClick,
+}) => (
   <motion.div
     whileHover={{ scale: 1.03, y: -5 }}
     transition={{ type: "spring", stiffness: 300 }}
@@ -583,7 +599,10 @@ const AccountTypeCard = ({ icon, image, title, description, perks }) => (
           <li key={index}>{perk}</li>
         ))}
       </ul>
-      <button className="mt-6 w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors duration-300">
+      <button
+        onClick={onLearnMoreClick} // Attach the passed click handler
+        className="mt-6 w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors duration-300"
+      >
         Learn More
       </button>
     </div>
@@ -596,6 +615,7 @@ AccountTypeCard.propTypes = {
   title: PropTypes.string.isRequired,
   description: PropTypes.string.isRequired,
   perks: PropTypes.arrayOf(PropTypes.string).isRequired,
+  onLearnMoreClick: PropTypes.func.isRequired, // Add propType for the function
 };
 
 const PerkCard = ({ icon, title, description }) => (

@@ -37,34 +37,35 @@ const Ach = () => {
   const otpInputRefs = useRef([]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userData = JSON.parse(localStorage.getItem("userData"));
+      const userData = JSON.parse(localStorage.getItem("userData"));
+      const token = localStorage.getItem("token");
 
-    if (!token || !userData || userData.role !== "client") {
-      navigate("/login");
-      return;
-    }
-
-    const fetchAccounts = async () => {
-      try {
-        const res = await axios.get(`${API_BASE_URL}/api/account`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setAccounts(
-          res.data.accounts.filter(
-            (acc) => acc.status === "active" && acc.accountNumber
-          )
-        );
-      } catch (err) {
-        console.error("Fetch account error:", err);
-        setError("Failed to fetch accounts.");
-        if ([401, 403].includes(err.response?.status)) {
-          navigate("/login");
+      const fetchAccounts = async () => {
+        try {
+          const response = await axios.get(`${API_BASE_URL}/api/account`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          setAccounts(
+            response.data.accounts.filter(
+              (acc) => acc.status === "active" && acc.accountNumber
+            )
+          );
+        } catch (err) {
+          console.error("Fetch accounts error:", err);
+          if (err.response?.status === 401) {
+            setError("Your session has expired. Please log in again.");
+            localStorage.removeItem("token");
+            localStorage.removeItem("userData");
+            navigate("/login");
+          } else {
+            setError(
+              err.response?.data?.message ||
+                "Failed to fetch accounts. Please try again."
+            );
+          }
         }
-      }
-    };
-
-    fetchAccounts();
+      };
+      fetchAccounts();
 
     socket.on("transactionUpdate", (tx) => {
       if (tx.userId === userData?.id) {

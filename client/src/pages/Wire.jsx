@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, DollarSign } from "lucide-react"; // Using DollarSign for general transfer icon
+import { ArrowRight, DollarSign } from "lucide-react";
 import axios from "axios";
 import io from "socket.io-client";
 
@@ -15,14 +15,15 @@ const Wire = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     accountType: "", // This will be the type (e.g., 'checking')
+    accountNumber: "", // This will hold the sender's account number
     recipientAccountNumber: "", // This will be the 10-digit account number
     recipientAccountType: "",
     amount: "",
     description: "",
     recipientBank: "",
     recipientName: "", // Added for wire transfer
-    swiftCode: "", // Added for wire transfer
-    bankAddress: "", // Added for wire transfer
+    swiftCode: "", // Now optional on frontend
+    bankAddress: "", // Now optional on frontend
   });
   const [accounts, setAccounts] = useState([]); // User's own accounts
   const [error, setError] = useState("");
@@ -30,65 +31,74 @@ const Wire = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [otpError, setOtpError] = useState(""); // Corrected this line
+  const [otpError, setOtpError] = useState("");
 
   // Refs for OTP input fields
   const otpInputRefs = useRef([]);
 
- useEffect(() => {
-   const userData = JSON.parse(localStorage.getItem("userData"));
-   const token = localStorage.getItem("token");
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const token = localStorage.getItem("token");
 
+    const fetchAccounts = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/account`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setAccounts(
+          response.data.accounts.filter(
+            (acc) => acc.status === "active" && acc.accountNumber
+          )
+        );
+      } catch (err) {
+        console.error("Fetch accounts error:", err);
+        if (err.response?.status === 401) {
+          setError("Your session has expired. Please log in again.");
+          localStorage.removeItem("token");
+          localStorage.removeItem("userData");
+          navigate("/login");
+        } else {
+          setError(
+            err.response?.data?.message ||
+              "Failed to fetch accounts. Please try again."
+          );
+        }
+      }
+    };
+    fetchAccounts();
 
+    socket.on("transactionUpdate", (transaction) => {
+      if (transaction.userId === userData?.id) {
+        setSuccess(
+          "Your wire transfer has been successfully initiated. It will take 2-5 working days to process."
+        );
+        setShowOtpPopup(false);
+        fetchAccounts(); // Re-fetch accounts to update balances
+      }
+    });
 
-   const fetchAccounts = async () => {
-     try {
-       const response = await axios.get(`${API_BASE_URL}/api/account`, {
-         headers: { Authorization: `Bearer ${token}` },
-       });
-       setAccounts(
-         response.data.accounts.filter(
-           (acc) => acc.status === "active" && acc.accountNumber
-         )
-       );
-     } catch (err) {
-       console.error("Fetch accounts error:", err);
-       if (err.response?.status === 401) {
-         setError("Your session has expired. Please log in again.");
-         localStorage.removeItem("token");
-         localStorage.removeItem("userData");
-         navigate("/login");
-       } else {
-         setError(
-           err.response?.data?.message ||
-             "Failed to fetch accounts. Please try again."
-         );
-       }
-     }
-   };
-   fetchAccounts();
-
-   socket.on("transactionUpdate", (transaction) => {
-     if (transaction.userId === userData?.id) {
-       setSuccess(
-         "Your wire transfer has been successfully initiated. It will take 2-5 working days to process."
-       );
-       setShowOtpPopup(false);
-       fetchAccounts();
-     }
-   });
-
-   return () => {
-     socket.off("transactionUpdate");
-   };
- }, [navigate]);
+    return () => {
+      socket.off("transactionUpdate");
+    };
+  }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      const newFormData = {
+        ...prev,
+        [name]: value,
+      };
+
+      // If the accountType is changed, find the corresponding accountNumber
+      if (name === "accountType") {
+        const selectedAccount = accounts.find((acc) => acc.type === value);
+        newFormData.accountNumber = selectedAccount
+          ? selectedAccount.accountNumber
+          : "";
+      }
+      return newFormData;
+    });
     if (error) setError("");
     if (success) setSuccess("");
   };
@@ -121,15 +131,15 @@ const Wire = () => {
     setOtpError("");
     setIsLoading(true);
 
+    // Frontend validation: swiftCode and bankAddress are NOT included here, making them optional
     if (
       !formData.accountType ||
+      !formData.accountNumber || // Explicitly check accountNumber
       !formData.recipientAccountNumber ||
       !formData.recipientAccountType ||
       !formData.amount ||
       !formData.recipientBank ||
-      !formData.recipientName ||
-      !formData.swiftCode ||
-      !formData.bankAddress
+      !formData.recipientName
     ) {
       setError("Please fill in all required fields.");
       setIsLoading(false);
@@ -153,8 +163,7 @@ const Wire = () => {
       const token = localStorage.getItem("token");
       await axios.post(
         `${API_BASE_URL}/api/client/transfers`,
-
-        formData,
+        formData, // formData now includes accountNumber, swiftCode, bankAddress (even if empty)
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -166,6 +175,8 @@ const Wire = () => {
       setOtp(["", "", "", "", "", ""]);
     } catch (err) {
       console.error("Wire transfer initiation error:", err);
+      // Log the exact error message from the backend for debugging
+      console.error("Backend error message:", err.response?.data?.message);
       if (err.response?.status === 401) {
         setError("Your session has expired. Please log in again.");
         localStorage.removeItem("token");
@@ -199,7 +210,6 @@ const Wire = () => {
 
       const response = await axios.post(
         `${API_BASE_URL}/api/client/verify-otp`,
-
         { otp: otpCode },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -207,6 +217,7 @@ const Wire = () => {
       setSuccess(response.data.message);
       setFormData({
         accountType: "",
+        accountNumber: "", // Reset accountNumber as well
         recipientAccountNumber: "",
         recipientAccountType: "",
         amount: "",
@@ -220,6 +231,8 @@ const Wire = () => {
       setShowOtpPopup(false);
     } catch (err) {
       console.error("OTP verification error:", err);
+      // Log the exact error message from the backend for debugging
+      console.error("Backend error message:", err.response?.data?.message);
       if (err.response?.status === 401) {
         setOtpError("Your session has expired. Please log in again.");
         localStorage.removeItem("token");
@@ -345,9 +358,10 @@ const Wire = () => {
                 />
               </div>
 
+              {/* SWIFT Code and Bank Address are now optional on the frontend */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Recipient Bank SWIFT/BIC Code
+                  Recipient Bank SWIFT/BIC Code (Optional)
                 </label>
                 <input
                   name="swiftCode"
@@ -356,14 +370,13 @@ const Wire = () => {
                   value={formData.swiftCode}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                  required
                   disabled={isLoading}
                 />
               </div>
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Recipient Bank Address
+                  Recipient Bank Address (Optional)
                 </label>
                 <input
                   name="bankAddress"
@@ -372,7 +385,6 @@ const Wire = () => {
                   value={formData.bankAddress}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                  required
                   disabled={isLoading}
                 />
               </div>
