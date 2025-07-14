@@ -156,7 +156,8 @@ const Wire = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        `${API_BASE_URL}/api/client/transfers/initiate`,
+        `${API_BASE_URL}/api/client/transfers`,
+
         formData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -201,7 +202,8 @@ const Wire = () => {
       }
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/client/transfers/verify-otp`,
+        `${API_BASE_URL}/api/client/verify-otp`,
+
         { otp: otpCode },
         { headers: { Authorization: `Bearer ${token}` } }
       );
