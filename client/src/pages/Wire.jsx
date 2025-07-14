@@ -35,57 +35,53 @@ const Wire = () => {
   // Refs for OTP input fields
   const otpInputRefs = useRef([]);
 
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("userData"));
-    const token = localStorage.getItem("token");
+ useEffect(() => {
+   const userData = JSON.parse(localStorage.getItem("userData"));
+   const token = localStorage.getItem("token");
 
-    if (!token || !userData || userData.role !== "client") {
-      console.log("No token or user data, redirecting to login.");
-      navigate("/login");
-      return;
-    }
 
-    const fetchAccounts = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/account`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setAccounts(
-          response.data.accounts.filter(
-            (acc) => acc.status === "active" && acc.accountNumber
-          )
-        );
-      } catch (err) {
-        console.error("Fetch accounts error:", err);
-        if (err.response?.status === 401) {
-          setError("Your session has expired. Please log in again.");
-          localStorage.removeItem("token");
-          localStorage.removeItem("userData");
-          navigate("/login");
-        } else {
-          setError(
-            err.response?.data?.message ||
-              "Failed to fetch accounts. Please try again."
-          );
-        }
-      }
-    };
-    fetchAccounts();
 
-    socket.on("transactionUpdate", (transaction) => {
-      if (transaction.userId === userData?.id) {
-        setSuccess(
-          "Your wire transfer has been successfully initiated. It will take 2-5 working days to process."
-        );
-        setShowOtpPopup(false);
-        fetchAccounts();
-      }
-    });
+   const fetchAccounts = async () => {
+     try {
+       const response = await axios.get(`${API_BASE_URL}/api/account`, {
+         headers: { Authorization: `Bearer ${token}` },
+       });
+       setAccounts(
+         response.data.accounts.filter(
+           (acc) => acc.status === "active" && acc.accountNumber
+         )
+       );
+     } catch (err) {
+       console.error("Fetch accounts error:", err);
+       if (err.response?.status === 401) {
+         setError("Your session has expired. Please log in again.");
+         localStorage.removeItem("token");
+         localStorage.removeItem("userData");
+         navigate("/login");
+       } else {
+         setError(
+           err.response?.data?.message ||
+             "Failed to fetch accounts. Please try again."
+         );
+       }
+     }
+   };
+   fetchAccounts();
 
-    return () => {
-      socket.off("transactionUpdate");
-    };
-  }, [navigate]);
+   socket.on("transactionUpdate", (transaction) => {
+     if (transaction.userId === userData?.id) {
+       setSuccess(
+         "Your wire transfer has been successfully initiated. It will take 2-5 working days to process."
+       );
+       setShowOtpPopup(false);
+       fetchAccounts();
+     }
+   });
+
+   return () => {
+     socket.off("transactionUpdate");
+   };
+ }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
