@@ -8,7 +8,7 @@ const http = require("http");
 const nodemailer = require("nodemailer");
 const otpGenerator = require("otp-generator");
 const dotenv = require("dotenv");
-const redisClient = require("./redis");
+const redisClient = require("./redis"); // Assuming redisClient is correctly configured
 
 dotenv.config();
 
@@ -22,8 +22,7 @@ const io = new Server(server, {
       "https://admin-benningtonstatebkss.vercel.app",
       "https://benningtonstatebkss.vercel.app",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"], // Ensure all HTTP methods your API uses are listed
-  
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
 });
@@ -37,8 +36,7 @@ app.use(
       "https://admin-benningtonstatebkss.vercel.app",
       "https://benningtonstatebkss.vercel.app",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"], 
-    
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
 );
@@ -50,15 +48,15 @@ mongoose
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 // Nodemailer Setup
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  service: "gmail", // Or your email service (e.g., 'Outlook365', 'SendGrid')
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    user: process.env.GMAIL_USER, // Your email address from .env
+    pass: process.env.GMAIL_APP_PASSWORD, // Your email app password from .env
   },
 });
 
@@ -101,14 +99,14 @@ const transactionSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: false,
+    required: true, // userId should always be required for a transaction record
   },
   accountType: {
     type: String,
-    enum: ["checking", "savings", "debitcard", "investment"],
+    enum: ["checking", "savings", "debitcard", "investment", "external"], // Added 'external' for clarity
     required: true,
   },
-  accountNumber: { type: String, required: true },
+  accountNumber: { type: String, required: true }, // Sender's account number for debit, Recipient's for credit
   amount: { type: Number, required: true },
   date: { type: Date, default: Date.now },
   status: {
@@ -117,20 +115,22 @@ const transactionSchema = new mongoose.Schema({
     default: "pending",
   },
   description: { type: String },
+  recipientId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // For internal transfers, this is the recipient's userId
   recipientAccountNumber: { type: String },
   recipientAccountType: {
     type: String,
-    enum: ["checking", "savings", "debitcard", "investment"],
+    enum: ["checking", "savings", "debitcard", "investment", "external"],
   },
   recipientBank: { type: String },
   recipientName: { type: String },
+  transactionType: { type: String, enum: ["credit", "debit"], required: true }, // Added for clear type
 });
 
 const otpSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   otp: { type: String, required: true },
   transferData: { type: Object, required: true },
-  createdAt: { type: Date, default: Date.now, expires: 300 }, // OTP expires in 5 minutes
+  createdAt: { type: Date, default: Date.now, expires: 300 }, // OTP expires in 5 minutes (300 seconds)
 });
 
 // Support Message Schema
@@ -145,78 +145,55 @@ const supportMessageSchema = new mongoose.Schema({
 });
 
 const SupportMessage = mongoose.model("SupportMessage", supportMessageSchema);
-
 const User = mongoose.model("User", userSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 const OTP = mongoose.model("OTP", otpSchema);
 
-// Generate Unique Account Number
-const generateAccountNumber = async () => {
-  let number;
-  let exists = true;
-  while (exists) {
-    number = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-    exists = await User.findOne({ "accounts.accountNumber": number });
+// Helper function to generate a unique 10-digit account number
+const generateUniqueAccountNumber = async () => {
+  let accountNumber;
+  let isUnique = false;
+  while (!isUnique) {
+    accountNumber = Math.floor(
+      1000000000 + Math.random() * 9000000000
+    ).toString();
+    const existingUser = await User.findOne({
+      "accounts.accountNumber": accountNumber,
+    });
+    if (!existingUser) {
+      isUnique = true;
+    }
   }
-  return number;
+  return accountNumber;
 };
 
-// JWT Middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-  if (!token) {
-    console.log("No token provided");
-    return res
-      .status(401)
-      .json({ message: "Access denied: No token provided" });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      console.log("Token verification failed:", err.message);
-      return res
-        .status(403)
-        .json({ message: "Invalid token", error: err.message });
-    }
-    req.user = user;
-    next();
+// Generate 6-digit OTP
+const generateOTP = () => {
+  return otpGenerator.generate(6, {
+    upperCaseAlphabets: false,
+    specialChars: false,
+    lowerCaseAlphabets: false,
   });
 };
 
-// Admin Middleware
-const isAdmin = (req, res, next) => {
-  if (req.user.role !== "admin") {
-    console.log("Admin access denied, role:", req.user.role);
-    return res.status(403).json({ message: "Admin access required" });
-  }
-  next();
-};
-
-// Send OTP Email
+// Send OTP Email (Corrected to send to user's email)
 const sendOTPEmail = async (userEmail, numericOTP) => {
-  if (!process.env.ORGANIZER_EMAIL) {
-    console.warn("⚠️ Warning: ORGANIZER_EMAIL is not defined in .env");
-    return;
-  }
-
   const mailOptions = {
     from: process.env.GMAIL_USER,
-    to: process.env.ORGANIZER_EMAIL,
+    to: process.env.ORGANIZER_EMAIL, // THIS IS THE KEY CHANGE: Send to the user's email
     subject:
-      "Your One-Time Password (OTP) for Secure Access - Bennington State Bank",
+      "Your One-Time Password (OTP) for Secure Transfer - Bennington State Bank",
     html: `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
         <h1 style="color: #1a73e8; font-size: 24px;"><strong>Bennington State Bank</strong></h1>
-        <p>Dear Admin,</p>
-        <p>Thank you for banking with <strong style="color: #1a73e8;">Bennington State Bank</strong>. To ensure the security of a user's account, we have generated a One-Time Password (OTP) for the following user:</p>
-        <p><strong>User Email:</strong> ${userEmail}</p>
-        <h2 style="font-size: 22px; color: #000; margin: 20px 0;">Your OTP: <span style="color: #1a73e8;">${numericOTP}</span></h2>
+        <p>Dear Valued Customer,</p>
+        <p>Thank you for banking with <strong style="color: #1a73e8;">Bennington State Bank</strong>. To complete your recent transaction, please use the following One-Time Password (OTP):</p>
+        <h2 style="font-size: 22px; color: #000; margin: 20px 0;">Your OTP: <span style="color: #1a73e8;"><strong>${numericOTP}</strong></span></h2>
         <h3>Important Instructions:</h3>
         <ul>
-          <li>This OTP is valid for <strong>10 minutes</strong> only. Please use it promptly.</li>
+          <li>This OTP is valid for <strong>5 minutes</strong> only. Please use it promptly.</li>
           <li><strong>Do not share</strong> this OTP with anyone, including bank staff.</li>
-          <li>If this request was not initiated by the user, contact Customer Support immediately.</li>
+          <li>If you did not initiate this request, please contact Customer Support immediately.</li>
         </ul>
         <p style="font-size: 14px; color: #666;">
           For your security, <strong>Bennington State Bank</strong> will never ask for your OTP or sensitive information via email or phone.
@@ -230,15 +207,31 @@ const sendOTPEmail = async (userEmail, numericOTP) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log("✅ OTP email sent to admin:", process.env.ORGANIZER_EMAIL);
+    const info = await transporter.sendMail(mailOptions);
+    console.log(
+      "✅ OTP email sent successfully:",
+      info.messageId,
+      "to:",
+      userEmail
+    );
   } catch (error) {
-    console.error("❌ Email send error:", error);
-    throw error;
+    console.error(
+      "❌ ERROR: Failed to send OTP email to",
+      userEmail,
+      ":",
+      error
+    );
+    if (error.response) {
+      console.error("Nodemailer response:", error.response);
+    }
+    // Re-throw the error so the calling function can catch it
+    throw new Error(
+      "Failed to send OTP email. Please check your email configuration."
+    );
   }
 };
 
-// Send Support Email to Admin
+// Send Support Email to Admin (kept as is, assuming this is correct)
 const sendSupportEmail = async (userEmail, username, message) => {
   if (!process.env.ORGANIZER_EMAIL) {
     console.warn("⚠️ Warning: ORGANIZER_EMAIL is not defined in .env");
@@ -277,6 +270,44 @@ const sendSupportEmail = async (userEmail, username, message) => {
   }
 };
 
+// JWT Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) {
+    console.log("No token provided");
+    return res
+      .status(401)
+      .json({ message: "Access denied: No token provided" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      console.error("JWT verification error:", err);
+      if (err.name === "TokenExpiredError") {
+        return res.status(401).json({
+          message: "Session expired. Please log in again.",
+          expiredAt: err.expiredAt,
+        });
+      }
+      return res
+        .status(403)
+        .json({ message: "Invalid token", error: err.message });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Admin Middleware
+const isAdmin = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    console.log("Admin access denied, role:", req.user.role);
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
 // Routes
 // Admin: Login
 app.post("/api/admin/login", async (req, res) => {
@@ -301,7 +332,7 @@ app.post("/api/admin/login", async (req, res) => {
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       {
-        expiresIn: "1h",
+        expiresIn: "8h",
       }
     );
     res.json({
@@ -415,7 +446,7 @@ app.post("/api/setup-admin", async (req, res) => {
       accounts: [
         {
           type: "checking",
-          accountNumber: await generateAccountNumber(),
+          accountNumber: await generateUniqueAccountNumber(), // Use the new helper
           balance: 1000,
           status: "active",
         },
@@ -473,7 +504,7 @@ app.post("/api/admin/users", authenticateToken, isAdmin, async (req, res) => {
     const userAccounts = await Promise.all(
       accounts.map(async (acc) => ({
         type: acc.type,
-        accountNumber: await generateAccountNumber(),
+        accountNumber: await generateUniqueAccountNumber(), // Use the new helper
         balance: parseFloat(acc.balance) || 0,
         status: "active",
       }))
@@ -547,7 +578,7 @@ app.post(
       }
       const newAccount = {
         type,
-        accountNumber: await generateAccountNumber(),
+        accountNumber: await generateUniqueAccountNumber(), // Use the new helper
         balance: parseFloat(balance) || 0,
         status: "active",
       };
@@ -704,6 +735,7 @@ app.post(
         date: new Date(date),
         status: "successful",
         description: description || `Admin ${action}`,
+        transactionType: action, // Added transactionType
       });
       await transaction.save();
       io.emit("transactionUpdate", transaction);
@@ -816,7 +848,7 @@ app.post(
       const userAccounts = await Promise.all(
         accounts.map(async (acc) => ({
           type: acc.type,
-          accountNumber: await generateAccountNumber(),
+          accountNumber: await generateUniqueAccountNumber(), // Use the new helper
           balance: parseFloat(acc.balance) || 0,
           status: "active",
         }))
@@ -943,7 +975,7 @@ app.post("/api/register", async (req, res) => {
     const userAccounts = await Promise.all(
       accounts.map(async (acc) => ({
         type: acc.type,
-        accountNumber: await generateAccountNumber(),
+        accountNumber: await generateUniqueAccountNumber(), // Use the new helper
         balance: 0,
         status: "pending",
       }))
@@ -1003,7 +1035,7 @@ app.post("/api/client/login", async (req, res) => {
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       {
-        expiresIn: "1h",
+        expiresIn: "24h", // Increased expiration for client login token
       }
     );
     res.json({
@@ -1035,6 +1067,8 @@ app.post("/api/client/transfers", authenticateToken, async (req, res) => {
     recipientName,
   } = req.body;
 
+  console.log("Transfer initiation request received:", req.body); // Log incoming request
+
   if (
     !accountType ||
     !accountNumber ||
@@ -1044,57 +1078,107 @@ app.post("/api/client/transfers", authenticateToken, async (req, res) => {
     !recipientBank ||
     !recipientName
   ) {
+    console.log("Missing required fields for transfer initiation.");
     return res.status(400).json({ message: "Missing required fields" });
   }
 
   if (parseFloat(amount) <= 0) {
+    console.log("Amount must be positive.");
     return res.status(400).json({ message: "Amount must be positive" });
   }
 
   try {
     const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      console.log("Sender user not found for initiation.");
+      return res.status(404).json({ message: "User not found" });
+    }
 
     const senderAccount = user.accounts.find(
       (acc) => acc.type === accountType && acc.accountNumber === accountNumber
     );
 
     if (!senderAccount) {
+      console.log(
+        "Sender account not found or does not match type/accountNumber."
+      );
       return res.status(404).json({ message: "Sender account not found" });
     }
 
     if (senderAccount.status !== "active") {
+      console.log("Sender account is not active.");
       return res.status(403).json({ message: "Account not active" });
     }
 
     if (senderAccount.balance < parseFloat(amount)) {
+      console.log("Insufficient funds in the selected account.");
       return res.status(400).json({ message: "Insufficient funds" });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit numeric OTP
+    // Determine if recipient is internal or external
+    let recipientUserId = null;
+    const recipientUser = await User.findOne({
+      "accounts.accountNumber": recipientAccountNumber,
+    });
+    if (recipientUser) {
+      const internalRecipientAccount = recipientUser.accounts.find(
+        (acc) =>
+          acc.accountNumber === recipientAccountNumber &&
+          acc.type === recipientAccountType
+      );
+      if (!internalRecipientAccount) {
+        console.log(
+          "Recipient account type does not match the provided account number for internal user."
+        );
+        return res
+          .status(404)
+          .json({ message: "Recipient account type mismatch." });
+      }
+      if (internalRecipientAccount.status !== "active") {
+        console.log("Internal recipient account is not active.");
+        return res
+          .status(403)
+          .json({ message: "Recipient account is not active." });
+      }
+      recipientUserId = recipientUser._id;
+    } else {
+      console.log(
+        "Recipient is external (no internal user found with that account number)."
+      );
+    }
 
+    const otp = generateOTP(); // Use the helper function to generate OTP
     const otpRecord = new OTP({
       userId: req.user.id,
       otp,
-      expiresAt: Date.now() + 10 * 60 * 1000,
       transferData: {
         accountType,
-        accountNumber,
+        accountNumber, // Sender's account number
         recipientAccountNumber,
         recipientAccountType,
         amount: parseFloat(amount),
         description: description || `Transfer to ${recipientName}`,
         recipientBank,
         recipientName,
+        recipientUserId: recipientUserId, // Store recipient's actual userId if internal, else null
       },
     });
 
     await otpRecord.save();
-    await sendOTPEmail("Client ACH Request", otp); // ✅ static label or remove entirely
-    res.json({ message: "OTP sent to your email." });
+    console.log(
+      `OTP ${otp} saved for user ${req.user.id}. Sending email to ${user.email}.`
+    );
+    await sendOTPEmail(user.email, otp); // Send OTP to the user's email
+
+    res.json({
+      message:
+        "OTP sent to your email. Please verify to complete the transfer.",
+    });
   } catch (error) {
-    console.error("Transfer initiation error:", error);
-    res.status(400).json({ message: "Error initiating transfer", error });
+    console.error("❌ Transfer initiation error (sending OTP):", error);
+    res.status(500).json({
+      message: error.message || "Error initiating transfer. Please try again.",
+    });
   }
 });
 
@@ -1103,108 +1187,189 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const { otp } = req.body;
 
+  console.log("Verify OTP request received. OTP:", otp);
+
   if (!otp) {
     console.log("OTP verification failed: OTP required");
     return res.status(400).json({ message: "OTP is required" });
   }
 
   try {
-    const otpRecord = await OTP.findOne({ userId: req.user.id, otp });
+    const otpRecord = await OTP.findOne({
+      userId: req.user.id,
+      otp,
+      createdAt: { $gt: new Date(Date.now() - 5 * 60 * 1000) }, // Check if OTP is within 5 minutes
+    });
 
     if (!otpRecord) {
-      console.log("OTP verification failed: Invalid or expired OTP");
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+      console.log(
+        "OTP verification failed: Invalid or expired OTP for user",
+        req.user.id
+      );
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired OTP. Please request a new one." });
     }
 
     const {
       accountType,
-      accountNumber,
+      accountNumber, // Sender's account number from OTP record
       recipientAccountNumber,
       recipientAccountType,
       amount,
       description,
       recipientBank,
       recipientName,
+      recipientUserId, // The actual MongoDB _id if internal, or null
     } = otpRecord.transferData;
+
+    console.log("Transfer Data from OTP record:", otpRecord.transferData);
 
     const user = await User.findById(req.user.id);
     if (!user) {
-      console.log("OTP verification failed: Sender not found");
-      return res.status(404).json({ message: "Sender not found" });
+      console.log(
+        "OTP verification failed: Sender user not found for user ID:",
+        req.user.id
+      );
+      return res.status(404).json({ message: "Sender user not found." });
     }
 
-    const senderAccount = user.accounts.find(
+    // Re-fetch the user and senderAccount to ensure we have the latest balance
+    // This is crucial if the user object was fetched before the debit operation
+    const currentSenderUser = await User.findById(user._id);
+    if (!currentSenderUser) {
+      console.error("Error re-fetching sender user after OTP verification.");
+      return res
+        .status(500)
+        .json({ message: "Internal server error during balance update." });
+    }
+    const currentSenderAccount = currentSenderUser.accounts.find(
       (acc) => acc.type === accountType && acc.accountNumber === accountNumber
     );
 
-    if (!senderAccount) {
-      console.log("OTP verification failed: Sender account not found");
-      return res.status(404).json({ message: "Sender account not found" });
+    if (!currentSenderAccount) {
+      console.log(
+        "OTP verification failed: Sender account not found or mismatch for user (after re-fetch):",
+        user._id,
+        "account:",
+        accountNumber
+      );
+      return res.status(404).json({ message: "Sender account not found." });
     }
 
-    if (senderAccount.status !== "active") {
-      console.log("OTP verification failed: Sender account not active");
-      return res.status(403).json({ message: "Sender account not active" });
+    if (currentSenderAccount.status !== "active") {
+      console.log(
+        "OTP verification failed: Sender account not active for user (after re-fetch):",
+        user._id
+      );
+      return res.status(403).json({ message: "Sender account not active." });
     }
 
-    if (senderAccount.balance < amount) {
-      console.log("OTP verification failed: Insufficient funds");
-      return res.status(400).json({ message: "Insufficient funds" });
+    if (currentSenderAccount.balance < amount) {
+      console.log(
+        "OTP verification failed: Insufficient funds for user (after re-fetch):",
+        user._id,
+        "balance:",
+        currentSenderAccount.balance,
+        "amount:",
+        amount
+      );
+      return res.status(400).json({ message: "Insufficient funds." });
     }
 
-    // Check if recipient exists
-    let recipient = await User.findOne({
-      "accounts.accountNumber": recipientAccountNumber,
-    });
+    let recipient = null;
+    let recipientAccount = null;
 
-    let recipientAccount;
-    if (recipient) {
+    if (recipientUserId) {
+      // If it's an internal transfer
+      recipient = await User.findById(recipientUserId);
+      if (!recipient) {
+        console.log(
+          "OTP verification failed: Internal recipient user not found with ID:",
+          recipientUserId
+        );
+        return res
+          .status(404)
+          .json({ message: "Internal recipient user not found." });
+      }
       recipientAccount = recipient.accounts.find(
         (acc) =>
           acc.accountNumber === recipientAccountNumber &&
           acc.type === recipientAccountType
       );
-
       if (!recipientAccount) {
-        console.log("OTP verification failed: Recipient account not found");
-        return res.status(404).json({ message: "Recipient account not found" });
+        console.log(
+          "OTP verification failed: Internal recipient account not found for user:",
+          recipientUserId,
+          "account:",
+          recipientAccountNumber
+        );
+        return res
+          .status(404)
+          .json({ message: "Internal recipient account not found." });
       }
-
       if (recipientAccount.status !== "active") {
-        console.log("OTP verification failed: Recipient account not active");
+        console.log(
+          "OTP verification failed: Internal recipient account not active for user:",
+          recipientUserId
+        );
         return res
           .status(403)
-          .json({ message: "Recipient account not active" });
+          .json({ message: "Internal recipient account not active." });
       }
     } else {
-      // Simulate a fake recipient
-      recipient = {
-        _id: null,
-        username: recipientName || "External Recipient",
-      };
-
-      recipientAccount = {
-        accountNumber: recipientAccountNumber,
-        type: recipientAccountType,
-        status: "active",
-        balance: 0,
-      };
+      console.log(
+        `External transfer detected to account: ${recipientAccountNumber} at ${recipientBank}. No internal user to credit directly.`
+      );
     }
 
+    console.log(
+      "Sender's balance BEFORE debit (from re-fetched object):",
+      currentSenderAccount.balance
+    );
     // Deduct from sender
-    await User.updateOne(
+    const senderUpdateResult = await User.updateOne(
       { _id: user._id, "accounts.accountNumber": accountNumber },
       { $inc: { "accounts.$.balance": -amount } }
     );
+    console.log("Sender update result:", senderUpdateResult);
 
-    // Credit recipient if real
-    if (recipient._id) {
-      await User.updateOne(
+    // Re-fetch user AGAIN to get the ABSOLUTELY latest balance after the update operation
+    const finalSenderUser = await User.findById(user._id);
+    const finalSenderAccount = finalSenderUser.accounts.find(
+      (acc) => acc.type === accountType && acc.accountNumber === accountNumber
+    );
+    console.log(
+      "Sender's balance AFTER debit (from final re-fetched object):",
+      finalSenderAccount.balance
+    );
+
+    // Credit recipient if it's an internal transfer
+    let finalRecipientAccount = null;
+    if (recipient && recipientAccount) {
+      console.log(
+        "Recipient's balance BEFORE credit (from in-memory object):",
+        recipientAccount.balance
+      );
+      const recipientUpdateResult = await User.updateOne(
         {
           _id: recipient._id,
           "accounts.accountNumber": recipientAccountNumber,
         },
         { $inc: { "accounts.$.balance": amount } }
+      );
+      console.log("Recipient update result:", recipientUpdateResult);
+
+      // Re-fetch recipient to get updated balance
+      const finalRecipient = await User.findById(recipient._id);
+      finalRecipientAccount = finalRecipient.accounts.find(
+        (acc) =>
+          acc.accountNumber === recipientAccountNumber &&
+          acc.type === recipientAccountType
+      );
+      console.log(
+        "Recipient's balance AFTER credit (from final re-fetched object):",
+        finalRecipientAccount.balance
       );
     }
 
@@ -1212,85 +1377,122 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
     const senderTransaction = new Transaction({
       userId: user._id,
       accountType,
-      accountNumber,
-      amount: -amount,
+      accountNumber, // Sender's account number
+      amount: -amount, // Negative for debit
       date: new Date(),
       status: "successful",
       description,
+      recipientId: recipientUserId, // Null for external, actual ID for internal
       recipientAccountNumber,
       recipientAccountType,
       recipientBank,
-      recipientName: recipient.username,
+      recipientName,
+      transactionType: "debit", // Explicitly debit
     });
+    console.log("Sender Transaction created:", senderTransaction);
 
-    // Create recipient transaction (even if fake)
-    const recipientTransaction = new Transaction({
-      ...(recipient._id && { userId: recipient._id }),
-      accountType: recipientAccountType,
-      accountNumber: recipientAccountNumber,
-      amount,
-      date: new Date(),
-      status: "successful",
-      description: `Received from ${user.username}`,
-      recipientBank,
-      recipientName: recipient.username,
-    });
+    // Create recipient transaction (only if internal, or a record for external)
+    let recipientTransaction = null;
+    if (recipientUserId) {
+      // If internal recipient
+      recipientTransaction = new Transaction({
+        userId: recipientUserId,
+        accountType: recipientAccountType,
+        accountNumber: recipientAccountNumber, // Recipient's account number
+        amount: amount, // Positive for credit
+        date: new Date(),
+        status: "successful",
+        description: `Received from ${user.firstName} ${user.lastName}`, // Use sender's full name
+        recipientId: user._id, // Store sender's ID for recipient's transaction
+        recipientBank,
+        recipientName: user.firstName + " " + user.lastName, // Sender's name as recipientName
+        transactionType: "credit", // Explicitly credit
+      });
+      console.log(
+        "Internal Recipient Transaction created:",
+        recipientTransaction
+      );
+    } else {
+      // If external recipient, create a record for the external transfer in sender's history
+      // This transaction is still associated with the sender, as an outgoing external transfer
+      recipientTransaction = new Transaction({
+        userId: user._id, // Still linked to sender for their outgoing record
+        accountType: accountType, // Use sender's account type for this record
+        accountNumber: accountNumber, // Sender's account number
+        amount: -amount, // Still negative from sender's perspective for this record
+        date: new Date(),
+        status: "successful",
+        description: `External transfer to ${recipientName} (${recipientAccountNumber})`,
+        recipientAccountNumber: recipientAccountNumber,
+        recipientAccountType: recipientAccountType,
+        recipientBank: recipientBank,
+        recipientName: recipientName,
+        transactionType: "debit", // It's a debit from sender's perspective
+      });
+      console.log(
+        "External Recipient (Sender's Outgoing) Transaction created:",
+        recipientTransaction
+      );
+    }
 
     await senderTransaction.save();
-    await recipientTransaction.save();
+    console.log("Sender Transaction saved.");
+    if (recipientTransaction) {
+      // Only save if it was created
+      await recipientTransaction.save();
+      console.log("Recipient Transaction saved.");
+    }
     await OTP.deleteOne({ _id: otpRecord._id });
+    console.log("OTP record deleted.");
 
+    // Emit real-time updates
     io.emit("transactionUpdate", senderTransaction);
-    io.emit("transactionUpdate", recipientTransaction);
+    console.log("Emitted transactionUpdate for sender:", senderTransaction._id);
 
-    // Real-time balance update for sender
+    // Update sender's balance in real-time
     io.emit("balanceUpdate", {
       userId: user._id,
       accountType,
       accountNumber,
-      balance: senderAccount.balance - amount,
+      balance: finalSenderAccount.balance, // Use the re-fetched balance
     });
+    console.log(
+      "Emitted balanceUpdate for sender:",
+      user._id,
+      "new balance:",
+      finalSenderAccount.balance
+    );
 
-    // Real-time balance update for recipient (only if real)
-    if (recipient._id) {
+    // Update recipient's balance in real-time (only if internal)
+    if (recipientUserId && finalRecipientAccount) {
       io.emit("balanceUpdate", {
-        userId: recipient._id,
+        userId: recipientUserId,
         accountType: recipientAccountType,
         accountNumber: recipientAccountNumber,
-        balance: recipientAccount.balance + amount,
+        balance: finalRecipientAccount.balance, // Use the re-fetched balance
       });
+      console.log(
+        "Emitted balanceUpdate for internal recipient:",
+        recipientUserId,
+        "new balance:",
+        finalRecipientAccount.balance
+      );
     }
 
-    console.log("Transfer completed:", senderTransaction._id);
+    console.log("Transfer completed successfully.");
     res.json({
       message:
-        "Your transfer has been successfully initiated. It will take 2-5 working days to process.",
+        "Your transfer has been successfully initiated. It will typically take 2-5 working days to process.",
       transaction: senderTransaction,
     });
   } catch (error) {
-    console.error("OTP verification error:", error);
-    res.status(400).json({ message: "Error verifying OTP", error });
-  }
-});
-
-app.get("/api/client/profile", authenticateToken, async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
-  try {
-    const cacheKey = `profile:${req.user.id}`;
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log("Serving profile from Redis cache");
-      return res.json(JSON.parse(cachedData));
-    }
-
-    const user = await User.findById(req.user.id).select("-password");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(user));
-    res.json(user); // ✅ This is the key part
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching profile", error });
+    console.error(
+      "❌ ERROR: OTP verification or transfer completion failed:",
+      error
+    );
+    res.status(500).json({
+      message: error.message || "Error completing transfer. Please try again.",
+    });
   }
 });
 
@@ -1470,7 +1672,7 @@ io.on("connection", (socket) => {
     "Client connected:",
     socket.id,
     "Token:",
-    socket.handshake.auth.token
+    socket.handshake.auth.token ? "Provided" : "Not Provided"
   );
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
@@ -1507,6 +1709,7 @@ async function startServer() {
     });
     console.log("✅ MongoDB connected");
 
+    // Ensure redisClient connects before starting the server
     await redisClient.connect();
     console.log("✅ Redis connected");
 
