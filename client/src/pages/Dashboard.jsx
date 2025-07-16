@@ -156,7 +156,7 @@ const Dashboard = () => {
                     label: "Bills",
                     path: "/dashboard/transfer",
                   },
-                  { icon: CreditCard, label: "Cards", path: "/manage-cards" },
+                  { icon: CreditCard, label: "Cards" },
                 ].map(({ icon: Icon, label, path }, index) => (
                   <div
                     key={index}
