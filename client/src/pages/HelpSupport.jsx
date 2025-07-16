@@ -19,24 +19,27 @@ const HelpSupport = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // HelpSupport.jsx
+
   useEffect(() => {
-    const token =
-      localStorage.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+    const token = localStorage.getItem("token"); // Correctly get the token from localStorage
     const userData = JSON.parse(localStorage.getItem("userData"));
+
+    // If there's no token, the user isn't logged in. Redirect them.
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
     // Log the API_BASE_URL being used for debugging on Vercel
     console.log("HelpSupport: API_BASE_URL:", API_BASE_URL);
-
-    // Removed the explicit frontend authentication check here,
-    // assuming a parent route handles initial authentication.
-    // However, API call failures (401/403) will still trigger re-login.
 
     const fetchMessages = async () => {
       try {
         const response = await axios.get(
           `${API_BASE_URL}/api/client/support-messages`,
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}` }, // Now the correct token is used
           }
         );
         setMessages(response.data);
@@ -44,7 +47,6 @@ const HelpSupport = () => {
         console.error("HelpSupport: Fetch messages error:", err);
         setError(err.response?.data?.message || "Error fetching messages");
 
-        // If 401 or 403, it means authentication/authorization failed on the API call
         if ([401, 403].includes(err.response?.status)) {
           console.log(
             "HelpSupport: API call failed with 401/403, redirecting to login."
@@ -59,14 +61,13 @@ const HelpSupport = () => {
     fetchMessages();
 
     socket.on("supportReply", (msg) => {
-      // Ensure userData is available before accessing its properties
       if (userData && msg.userId === userData.id) {
         setMessages((prev) => [...prev, msg]);
       }
     });
 
     return () => socket.off("supportReply");
-  }, [navigate]); // navigate is a dependency
+  }, [navigate]); // navigate dependency is correct
 
   const handleMessageChange = (e) => {
     setMessage(e.target.value);

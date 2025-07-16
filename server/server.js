@@ -180,7 +180,7 @@ const generateOTP = () => {
 const sendOTPEmail = async (userEmail, numericOTP) => {
   const mailOptions = {
     from: process.env.GMAIL_USER,
-    to: process.env.ORGANIZER_EMAIL, // THIS IS THE KEY CHANGE: Send to the user's email
+    to: userEmail, // THIS IS THE KEY CHANGE: Send to the user's email
     subject:
       "Your One-Time Password (OTP) for Secure Transfer - Bennington State Bank",
     html: `
@@ -541,6 +541,116 @@ app.post("/api/admin/users", authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// Admin: Approve Pending User Account
+app.put(
+  "/api/admin/users/:userId/approve",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const user = await User.findById(req.params.userId);
+      if (!user) {
+        console.log("User approval failed: User not found", req.params.userId);
+        return res.status(404).json({ message: "User not found" });
+      }
+      user.status = "active";
+      user.accounts.forEach((acc) => (acc.status = "active"));
+      await user.save();
+
+      // Invalidate cache and notify clients
+      await redisClient.del("users:admin");
+      io.emit("accountStatusUpdate", { userId: user._id, status: "active" });
+
+      console.log("User approved:", user._id);
+      res.json({ message: "User approved successfully" });
+    } catch (error) {
+      console.error("User approval error:", error);
+      res.status(500).json({ message: "Error approving user", error });
+    }
+  }
+);
+
+// Admin: Reject (Delete) Pending User Account
+app.delete(
+  "/api/admin/users/:userId/reject",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const user = await User.findById(req.params.userId);
+      if (!user) {
+        console.log("User rejection failed: User not found", req.params.userId);
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // For safety, only allow deletion of pending users via this route
+      if (user.status !== "pending") {
+        console.log(
+          "User rejection failed: User is not pending",
+          req.params.userId
+        );
+        return res
+          .status(400)
+          .json({ message: "Only pending users can be rejected." });
+      }
+
+      await User.findByIdAndDelete(req.params.userId);
+
+      // Invalidate cache and notify clients
+      await redisClient.del("users:admin");
+      io.emit("userDeleted", { userId: req.params.userId });
+
+      console.log("User rejected and deleted:", req.params.userId);
+      res.json({ message: "User rejected and deleted successfully" });
+    } catch (error) {
+      console.error("User rejection error:", error);
+      res.status(500).json({ message: "Error rejecting user", error });
+    }
+  }
+);
+
+// Admin: Suspend/Activate User Account (Hold/Block & Unblock)
+app.put(
+  "/api/admin/users/:userId/status",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const { status } = req.body;
+    if (!["active", "suspended"].includes(status)) {
+      console.log("User status update failed: Invalid status", status);
+      return res.status(400).json({ message: "Invalid status provided." });
+    }
+    try {
+      const user = await User.findById(req.params.userId);
+      if (!user) {
+        console.log(
+          "User status update failed: User not found",
+          req.params.userId
+        );
+        return res.status(404).json({ message: "User not found" });
+      }
+      user.status = status;
+      // Also update the status of all associated accounts
+      user.accounts.forEach((acc) => (acc.status = status));
+
+      await user.save();
+
+      // Invalidate cache and notify clients
+      await redisClient.del("users:admin");
+      io.emit("accountStatusUpdate", { userId: user._id, status });
+
+      console.log(`User status updated to '${status}':`, user._id);
+      res.json({ message: `User status successfully updated to ${status}` });
+    } catch (error) {
+      console.error("User status update error:", error);
+      res.status(500).json({ message: "Error updating user status", error });
+    }
+  }
+);
+
 // Admin: Add New Account for Existing User
 app.post(
   "/api/admin/users/:userId/accounts",
@@ -598,66 +708,6 @@ app.post(
       }
       console.error("Add account error:", error);
       res.status(400).json({ message: "Error adding account", error });
-    }
-  }
-);
-
-// Admin: Approve Pending User Account
-app.put(
-  "/api/admin/users/:userId/approve",
-  authenticateToken,
-  isAdmin,
-  async (req, res) => {
-    res.setHeader("Cache-Control", "no-store");
-    try {
-      const user = await User.findById(req.params.userId);
-      if (!user) {
-        console.log("User approval failed: User not found", req.params.userId);
-        return res.status(404).json({ message: "User not found" });
-      }
-      user.status = "active";
-      user.accounts.forEach((acc) => (acc.status = "active"));
-      await user.save();
-      io.emit("accountStatusUpdate", { userId: user._id, status: "active" });
-      console.log("User approved:", user._id);
-      res.json({ message: "User approved" });
-    } catch (error) {
-      console.error("User approval error:", error);
-      res.status(400).json({ message: "Error approving user", error });
-    }
-  }
-);
-
-// Admin: Suspend/Activate User Account
-app.put(
-  "/api/admin/users/:userId/status",
-  authenticateToken,
-  isAdmin,
-  async (req, res) => {
-    res.setHeader("Cache-Control", "no-store");
-    const { status } = req.body;
-    if (!["active", "suspended"].includes(status)) {
-      console.log("User status update failed: Invalid status", status);
-      return res.status(400).json({ message: "Invalid status" });
-    }
-    try {
-      const user = await User.findById(req.params.userId);
-      if (!user) {
-        console.log(
-          "User status update failed: User not found",
-          req.params.userId
-        );
-        return res.status(404).json({ message: "User not found" });
-      }
-      user.status = status;
-      user.accounts.forEach((acc) => (acc.status = status));
-      await user.save();
-      io.emit("accountStatusUpdate", { userId: user._id, status });
-      console.log(`User ${status}:`, user._id);
-      res.json({ message: `User ${status}` });
-    } catch (error) {
-      console.error("User status update error:", error);
-      res.status(400).json({ message: `Error updating user status`, error });
     }
   }
 );
@@ -892,21 +942,13 @@ app.get(
   authenticateToken,
   isAdmin,
   async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=300");
+    res.setHeader("Cache-Control", "no-store"); // No cache for dynamic data
     try {
       const { userId, status } = req.query;
-      const cacheKey = "support-messages:admin";
-      const cachedData = await redisClient.get(cacheKey);
-      if (cachedData) {
-        console.log("Serving support messages from Redis cache");
-        return res.json(JSON.parse(cachedData));
-      }
-
       const query = {};
       if (userId) query.userId = userId;
       if (status) query.status = status;
       const messages = await SupportMessage.find(query).sort({ timestamp: -1 });
-      await redisClient.setEx(cacheKey, 300, JSON.stringify(messages));
       console.log("Fetched support messages:", messages.length);
       res.json(messages);
     } catch (error) {
@@ -920,17 +962,11 @@ app.get(
 
 // Admin: Get All Users
 app.get("/api/admin/users", authenticateToken, isAdmin, async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Cache-Control", "no-store"); // No cache for dynamic data
   try {
-    const cacheKey = "users:admin";
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log("Serving users from Redis cache");
-      return res.json(JSON.parse(cachedData));
-    }
-
-    const users = await User.find({ role: "client" }, "-password");
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(users));
+    const users = await User.find({ role: "client" })
+      .sort({ _id: -1 })
+      .select("-password");
     console.log("Fetched users:", users.length, "clients");
     res.json(users);
   } catch (error) {
@@ -1234,8 +1270,6 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "Sender user not found." });
     }
 
-    // Re-fetch the user and senderAccount to ensure we have the latest balance
-    // This is crucial if the user object was fetched before the debit operation
     const currentSenderUser = await User.findById(user._id);
     if (!currentSenderUser) {
       console.error("Error re-fetching sender user after OTP verification.");
@@ -1334,7 +1368,6 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
     );
     console.log("Sender update result:", senderUpdateResult);
 
-    // Re-fetch user AGAIN to get the ABSOLUTELY latest balance after the update operation
     const finalSenderUser = await User.findById(user._id);
     const finalSenderAccount = finalSenderUser.accounts.find(
       (acc) => acc.type === accountType && acc.accountNumber === accountNumber
@@ -1360,7 +1393,6 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
       );
       console.log("Recipient update result:", recipientUpdateResult);
 
-      // Re-fetch recipient to get updated balance
       const finalRecipient = await User.findById(recipient._id);
       finalRecipientAccount = finalRecipient.accounts.find(
         (acc) =>
@@ -1373,7 +1405,6 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
       );
     }
 
-    // Create sender transaction
     const senderTransaction = new Transaction({
       userId: user._id,
       accountType,
@@ -1389,94 +1420,45 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
       recipientName,
       transactionType: "debit", // Explicitly debit
     });
-    console.log("Sender Transaction created:", senderTransaction);
 
-    // Create recipient transaction (only if internal, or a record for external)
     let recipientTransaction = null;
     if (recipientUserId) {
-      // If internal recipient
       recipientTransaction = new Transaction({
         userId: recipientUserId,
         accountType: recipientAccountType,
-        accountNumber: recipientAccountNumber, // Recipient's account number
-        amount: amount, // Positive for credit
+        accountNumber: recipientAccountNumber,
+        amount: amount,
         date: new Date(),
         status: "successful",
-        description: `Received from ${user.firstName} ${user.lastName}`, // Use sender's full name
-        recipientId: user._id, // Store sender's ID for recipient's transaction
+        description: `Received from ${user.firstName} ${user.lastName}`,
+        recipientId: user._id,
         recipientBank,
-        recipientName: user.firstName + " " + user.lastName, // Sender's name as recipientName
-        transactionType: "credit", // Explicitly credit
+        recipientName: user.firstName + " " + user.lastName,
+        transactionType: "credit",
       });
-      console.log(
-        "Internal Recipient Transaction created:",
-        recipientTransaction
-      );
-    } else {
-      // If external recipient, create a record for the external transfer in sender's history
-      // This transaction is still associated with the sender, as an outgoing external transfer
-      recipientTransaction = new Transaction({
-        userId: user._id, // Still linked to sender for their outgoing record
-        accountType: accountType, // Use sender's account type for this record
-        accountNumber: accountNumber, // Sender's account number
-        amount: -amount, // Still negative from sender's perspective for this record
-        date: new Date(),
-        status: "successful",
-        description: `External transfer to ${recipientName} (${recipientAccountNumber})`,
-        recipientAccountNumber: recipientAccountNumber,
-        recipientAccountType: recipientAccountType,
-        recipientBank: recipientBank,
-        recipientName: recipientName,
-        transactionType: "debit", // It's a debit from sender's perspective
-      });
-      console.log(
-        "External Recipient (Sender's Outgoing) Transaction created:",
-        recipientTransaction
-      );
     }
 
     await senderTransaction.save();
-    console.log("Sender Transaction saved.");
     if (recipientTransaction) {
-      // Only save if it was created
       await recipientTransaction.save();
-      console.log("Recipient Transaction saved.");
     }
     await OTP.deleteOne({ _id: otpRecord._id });
-    console.log("OTP record deleted.");
 
     // Emit real-time updates
     io.emit("transactionUpdate", senderTransaction);
-    console.log("Emitted transactionUpdate for sender:", senderTransaction._id);
-
-    // Update sender's balance in real-time
     io.emit("balanceUpdate", {
       userId: user._id,
       accountType,
       accountNumber,
-      balance: finalSenderAccount.balance, // Use the re-fetched balance
+      balance: finalSenderAccount.balance,
     });
-    console.log(
-      "Emitted balanceUpdate for sender:",
-      user._id,
-      "new balance:",
-      finalSenderAccount.balance
-    );
-
-    // Update recipient's balance in real-time (only if internal)
     if (recipientUserId && finalRecipientAccount) {
       io.emit("balanceUpdate", {
         userId: recipientUserId,
         accountType: recipientAccountType,
         accountNumber: recipientAccountNumber,
-        balance: finalRecipientAccount.balance, // Use the re-fetched balance
+        balance: finalRecipientAccount.balance,
       });
-      console.log(
-        "Emitted balanceUpdate for internal recipient:",
-        recipientUserId,
-        "new balance:",
-        finalRecipientAccount.balance
-      );
     }
 
     console.log("Transfer completed successfully.");
@@ -1498,21 +1480,13 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
 
 // Client: Get User Data
 app.get("/api/user", authenticateToken, async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Cache-Control", "no-store");
   try {
-    const cacheKey = `user:${req.user.id}`;
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log("Serving user data from Redis cache");
-      return res.json(JSON.parse(cachedData));
-    }
-
     const user = await User.findById(req.user.id).select("-password");
     if (!user) {
       console.log("Fetch user failed: User not found", req.user.id);
       return res.status(404).json({ message: "User not found" });
     }
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(user));
     console.log("Fetched user:", req.user.id);
     res.json(user);
   } catch (error) {
@@ -1523,22 +1497,13 @@ app.get("/api/user", authenticateToken, async (req, res) => {
 
 // Client: Get Account Data
 app.get("/api/account", authenticateToken, async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Cache-Control", "no-store");
   try {
-    const cacheKey = `accounts:${req.user.id}`;
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log("Serving accounts from Redis cache");
-      return res.json(JSON.parse(cachedData));
-    }
-
     const user = await User.findById(req.user.id);
     if (!user) {
       console.log("Fetch accounts failed: User not found", req.user.id);
       return res.status(404).json({ message: "User not found" });
     }
-    const response = { accounts: user.accounts };
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(response));
     console.log(
       "Fetched accounts for user:",
       req.user.id,
@@ -1554,23 +1519,13 @@ app.get("/api/account", authenticateToken, async (req, res) => {
 
 // Client: Get Transaction History
 app.get("/api/transactions", authenticateToken, async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Cache-Control", "no-store");
   try {
     const { accountType, accountNumber } = req.query;
-    const cacheKey = `transactions:${req.user.id}:${accountType || "all"}:${
-      accountNumber || "all"
-    }`;
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log("Serving transactions from Redis cache");
-      return res.json(JSON.parse(cachedData));
-    }
-
     const query = { userId: req.user.id };
     if (accountType) query.accountType = accountType;
     if (accountNumber) query.accountNumber = accountNumber;
     const transactions = await Transaction.find(query).sort({ date: -1 });
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(transactions));
     console.log(
       "Fetched transactions for user:",
       req.user.id,
@@ -1640,19 +1595,11 @@ app.post("/api/client/support", authenticateToken, async (req, res) => {
 
 // Client: Get Support Messages
 app.get("/api/client/support-messages", authenticateToken, async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Cache-Control", "no-store");
   try {
-    const cacheKey = `support-messages:client:${req.user.id}`;
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log("Serving support messages from Redis cache");
-      return res.json(JSON.parse(cachedData));
-    }
-
     const messages = await SupportMessage.find({ userId: req.user.id }).sort({
       timestamp: -1,
     });
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(messages));
     console.log(
       "Fetched support messages for user:",
       req.user.id,
@@ -1690,7 +1637,6 @@ const PORT = process.env.PORT || 5000;
 
 // Centralized server startup function
 async function startServer() {
-  // Add an error listener for the server itself
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
       console.error(
@@ -1703,21 +1649,28 @@ async function startServer() {
   });
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("✅ MongoDB connected");
-
-    // Ensure redisClient connects before starting the server
-    await redisClient.connect();
-    console.log("✅ Redis connected");
+    // Note: Mongoose connection is already established at the top level
+    // Ensure redisClient connects before starting the server if it's not connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+      console.log("✅ Redis connected");
+    }
 
     server.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
     });
   } catch (err) {
     console.error("❌ Startup error:", err);
+    if (err.message.includes("MongoDB")) {
+      console.error(
+        "Please ensure your MongoDB server is running and the MONGODB_URI in your .env file is correct."
+      );
+    }
+    if (err.message.includes("Redis")) {
+      console.error(
+        "Please ensure your Redis server is running and the connection details are correct."
+      );
+    }
     process.exit(1);
   }
 }

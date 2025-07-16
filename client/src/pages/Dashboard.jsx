@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Send,
@@ -10,17 +10,16 @@ import {
   ArrowRight,
   DollarSign,
   PiggyBank,
-  Landmark,
   TrendingUp,
   Link,
   Clock,
   Brain,
   Gift,
   ChevronRight,
-  LineChart,
 } from "lucide-react";
 import io from "socket.io-client";
 
+// Connect to the backend using the environment variable
 const API_BASE_URL =
   import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
 
@@ -34,22 +33,9 @@ const Dashboard = () => {
   const [userData, setUserData] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
-  const [error, setError] = useState("");
-  const [investmentInsights, setInvestmentInsights] = useState([
-    {
-      title: "Diversify Your Portfolio",
-      tip: "Spread your investments across different asset classes to reduce risk.",
-    },
-    {
-      title: "Long-Term Growth",
-      tip: "Focus on long-term investment goals rather than short-term market fluctuations.",
-    },
-    {
-      title: "Stay Informed",
-      tip: "Keep up-to-date with market news and economic indicators.",
-    },
-  ]);
+  // const [error, setError] = useState("");
 
+  // Dynamic Greeting Logic
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Good Morning");
@@ -57,6 +43,7 @@ const Dashboard = () => {
     else setGreeting("Good Evening");
   }, []);
 
+  // Fetch user and account data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -97,9 +84,9 @@ const Dashboard = () => {
         });
         if (!transRes.ok) throw new Error("Failed to fetch transactions");
         const transData = await transRes.json();
-        setTransactions(transData.slice(0, 3));
+        setTransactions(transData.slice(0, 3)); // Show only 3 recent transactions
       } catch (err) {
-        setError(err.message);
+        // setError(err.message);
         if (err.message.includes("401") || err.message.includes("403")) {
           navigate("/client/login");
         }
@@ -109,6 +96,7 @@ const Dashboard = () => {
     fetchData();
   }, [navigate]);
 
+  // WebSocket for real-time updates
   useEffect(() => {
     socket.on("balanceUpdate", (data) => {
       if (data.userId === userData?._id) {
@@ -134,12 +122,14 @@ const Dashboard = () => {
     };
   }, [userData]);
 
+  // Navigation Handlers
   const handleNavigation = (path) => {
     navigate(path);
   };
 
   return (
     <div>
+      {/* Blue Header Section */}
       <div className="bg-blue-800 h-40 p-6">
         <div className="container mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -199,16 +189,15 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Account & Card Section */}
       <div className="container mx-auto px-6 mt-6">
         <div className="bg-white rounded-lg shadow-lg p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-800">
               Account & Card
             </h2>
-            <div
-              className="flex items-center space-x-2 text-blue-600 cursor-pointer hover:text-blue-700"
-              onClick={() => handleNavigation("/accounts")}
-            >
+            {/* This div looks clickable but the onClick action has been removed */}
+            <div className="flex items-center space-x-2 text-blue-600 cursor-pointer hover:text-blue-700">
               <p className="text-sm">View account and card</p>
               <ArrowRight className="h-4 w-4" />
             </div>
@@ -253,6 +242,7 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Four Main Section Boxes */}
       <div className="container mx-auto px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
@@ -357,7 +347,7 @@ const Dashboard = () => {
             </div>
             <div className="mt-4 text-center">
               <button
-                onClick={() => {}}
+                onClick={() => handleNavigation("/transactions")}
                 className="text-blue-600 text-sm font-medium hover:underline hover:text-blue-800 transition-colors"
               >
                 View all transactions
@@ -459,31 +449,6 @@ const Dashboard = () => {
             <div className="mt-4 text-center">
               <button className="text-blue-600 text-sm font-medium hover:underline">
                 View all deals
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 lg:col-span-2">
-            <div className="flex items-center space-x-3 mb-4">
-              <LineChart className="h-6 w-6 text-blue-600" />
-              <h2 className="text-xl font-semibold text-gray-800">
-                Investment Insights
-              </h2>
-            </div>
-            <div className="space-y-4">
-              {investmentInsights.map((insight, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-50 p-4 rounded-lg border border-gray-200"
-                >
-                  <h3 className="font-medium mb-2">{insight.title}</h3>
-                  <p className="text-sm text-gray-700">{insight.tip}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 text-center">
-              <button className="text-blue-600 text-sm font-medium hover:underline">
-                Explore more insights
               </button>
             </div>
           </div>
