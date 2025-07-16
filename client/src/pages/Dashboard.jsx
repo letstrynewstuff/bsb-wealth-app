@@ -292,67 +292,63 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <div className="flex items-center space-x-3 mb-4">
-              <Clock className="h-6 w-6 text-blue-600" />
-              <h2 className="text-xl font-semibold text-gray-800">
-                Recent Transactions
-              </h2>
-            </div>
-            <div className="space-y-4">
-              {transactions.length > 0 ? (
-                transactions.map((transaction, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 border-b border-gray-200"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className={`p-2 rounded-full ${
-                          transaction.amount >= 0
-                            ? "bg-green-100"
-                            : "bg-red-100"
-                        }`}
-                      >
-                        <DollarSign
-                          className={`h-5 w-5 ${
-                            transaction.amount >= 0
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(transaction.date).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <p
-                      className={`font-medium ${
-                        transaction.amount >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
+
+          <div className="space-y-4 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+            {transactions.length > 0 ? (
+              transactions.map((transaction, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 border-b border-gray-200"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className={`p-2 rounded-full ${
+                        transaction.amount >= 0 ? "bg-green-100" : "bg-red-100"
                       }`}
                     >
-                      {transaction.amount >= 0 ? "+" : "-"}$
-                      {Math.abs(transaction.amount).toFixed(2)}
-                    </p>
+                      <DollarSign
+                        className={`h-5 w-5 ${
+                          transaction.amount >= 0
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <p className="font-medium">{transaction.description}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(transaction.date).toLocaleDateString()}
+                      </p>
+                      {/* Add status indicator */}
+                      <p
+                        className={`text-xs font-semibold mt-1 ${
+                          transaction.status === "approved"
+                            ? "text-green-600"
+                            : transaction.status === "rejected"
+                            ? "text-red-500"
+                            : "text-yellow-600"
+                        }`}
+                      >
+                        {transaction.status?.charAt(0).toUpperCase() +
+                          transaction.status?.slice(1) || "Pending"}
+                      </p>
+                    </div>
                   </div>
-                ))
-              ) : (
-                <p className="text-gray-600">No transactions found</p>
-              )}
-            </div>
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => handleNavigation("/transactions")}
-                className="text-blue-600 text-sm font-medium hover:underline hover:text-blue-800 transition-colors"
-              >
-                View all transactions
-              </button>
-            </div>
+                  <p
+                    className={`font-medium ${
+                      transaction.amount >= 0
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {transaction.amount >= 0 ? "+" : "-"}$
+                    {Math.abs(transaction.amount).toFixed(2)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-600">No transactions found</p>
+            )}
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">

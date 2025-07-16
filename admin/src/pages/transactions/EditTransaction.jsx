@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FileEdit } from "lucide-react";
+import io from "socket.io-client";
 
 const API_BASE_URL =
   import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
+const socket = io(API_BASE_URL);
 
 const EditTransaction = () => {
   const [transactions, setTransactions] = useState([]);
@@ -70,6 +72,25 @@ const EditTransaction = () => {
     fetchTransactions();
   }, [navigate, transactionId]);
 
+  useEffect(() => {
+    socket.on("transactionUpdated", (updatedTx) => {
+      setTransactions((prev) =>
+        prev.map((tx) => (tx._id === updatedTx._id ? updatedTx : tx))
+      );
+      if (selectedTransaction?._id === updatedTx._id) {
+        setSelectedTransaction(updatedTx);
+        setFormData({
+          amount: updatedTx.amount,
+          date: new Date(updatedTx.date).toISOString().split("T")[0],
+          status: updatedTx.status,
+          description: updatedTx.description || "",
+        });
+      }
+    });
+
+    return () => socket.off("transactionUpdated");
+  }, [selectedTransaction]);
+
   const handleSelectTransaction = (transaction) => {
     setSelectedTransaction(transaction);
     setFormData({
@@ -126,11 +147,11 @@ const EditTransaction = () => {
 
       setSuccess("Transaction updated successfully");
       setTransactions((prev) =>
-        prev.map((t) =>
-          t._id === selectedTransaction._id ? { ...t, ...data.transaction } : t
-        )
+        prev.map((t) => (t._id === selectedTransaction._id ? data : t))
       );
-      setSelectedTransaction({ ...selectedTransaction, ...data.transaction });
+      setSelectedTransaction(data);
+
+      socket.emit("transactionUpdated", data);
     } catch (err) {
       setError(err.message);
       if (err.message.includes("403") || err.message.includes("401")) {

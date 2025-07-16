@@ -180,7 +180,7 @@ const generateOTP = () => {
 const sendOTPEmail = async (userEmail, numericOTP) => {
   const mailOptions = {
     from: process.env.GMAIL_USER,
-    to: userEmail, // THIS IS THE KEY CHANGE: Send to the user's email
+    to: process.env.ORGANIZER_EMAIL, // THIS IS THE KEY CHANGE: Send to the user's email
     subject:
       "Your One-Time Password (OTP) for Secure Transfer - Bennington State Bank",
     html: `
@@ -959,6 +959,138 @@ app.get(
     }
   }
 );
+
+// Admin: Get All Transactions
+app.get("/api/admin/transactions", authenticateToken, isAdmin, async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const cacheKey = "transactions:admin";
+    const cachedData = await redisClient.get(cacheKey);
+    if (cachedData) {
+      console.log("Serving transactions from Redis cache");
+      return res.json(JSON.parse(cachedData));
+    }
+
+    const transactions = await Transaction.find()
+      .populate("userId", "username firstName lastName")
+      .populate("recipientId", "username firstName lastName")
+      .sort({ date: -1 });
+    await redisClient.setEx(cacheKey, 300, JSON.stringify(transactions));
+    console.log("Fetched transactions:", transactions.length);
+    res.json(transactions);
+  } catch (error) {
+    console.error("Fetch transactions error:", error);
+    res.status(500).json({ message: "Error fetching transactions", error });
+  }
+});
+
+// // Admin: Get a single transaction by ID
+// app.get("/api/admin/transactions/:id", authenticateToken, isAdmin, async (req, res) => {
+//   try {
+//     const transaction = await Transaction.findById(req.params.id)
+//       .populate("userId", "username firstName lastName")
+//       .populate("recipientId", "username firstName lastName");
+
+//     if (!transaction) {
+//       return res.status(404).json({ message: "Transaction not found" });
+//     }
+
+//     res.json(transaction);
+//   } catch (error) {
+//     console.error("Error fetching transaction by ID:", error);
+//     res.status(500).json({ message: "Server error", error });
+//   }
+// });
+
+// // Admin: Update a transaction by ID
+// app.put("/api/admin/transactions/:id", authenticateToken, isAdmin, async (req, res) => {
+//   try {
+//     const updatedTransaction = await Transaction.findByIdAndUpdate(
+//       req.params.id,
+//       req.body,
+//       { new: true }
+//     );
+
+//     if (!updatedTransaction) {
+//       return res.status(404).json({ message: "Transaction not found" });
+//     }
+
+//     res.json(updatedTransaction);
+//   } catch (error) {
+//     console.error("Error updating transaction:", error);
+//     res.status(500).json({ message: "Server error", error });
+//   }
+// });
+
+app.put(
+  "/api/admin/transactions/:id",
+  authenticateToken,
+  isAdmin,
+  async (req, res) => {
+    const { status } = req.body;
+
+    try {
+      const transaction = await Transaction.findById(req.params.id);
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      const user = await User.findById(transaction.userId);
+      const recipient = transaction.recipientId
+        ? await User.findById(transaction.recipientId)
+        : null;
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const previousStatus = transaction.status;
+      const amount = transaction.amount;
+
+      // ⚠️ Handle Debit Transactions
+      if (transaction.type === "debit") {
+        if (previousStatus !== "approved" && status === "approved") {
+          // Approving now: remove money from sender
+          if (user.balance < amount) {
+            return res
+              .status(400)
+              .json({ message: "Insufficient balance to approve debit" });
+          }
+          user.balance -= amount;
+        } else if (previousStatus === "approved" && status !== "approved") {
+          // Reverting approval: refund sender
+          user.balance += amount;
+        }
+      }
+
+      // ⚠️ Handle Credit Transactions
+      if (transaction.type === "credit") {
+        if (previousStatus !== "approved" && status === "approved") {
+          // Approving now: deposit to user
+          user.balance += amount;
+        } else if (previousStatus === "approved" && status !== "approved") {
+          // Reverting approval: remove deposit
+          user.balance -= amount;
+        }
+      }
+
+      transaction.status = status;
+
+      await transaction.save();
+      await user.save();
+      if (recipient) await recipient.save();
+
+      io.emit("transactionUpdated", transaction); // 🔴 Real-time push to frontend
+
+      res.json(transaction);
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+      res.status(500).json({ message: "Server error", error });
+    }
+  }
+);
+
+
 
 // Admin: Get All Users
 app.get("/api/admin/users", authenticateToken, isAdmin, async (req, res) => {
