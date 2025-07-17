@@ -19,55 +19,55 @@ const HelpSupport = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-// HelpSupport.jsx
+  // HelpSupport.jsx
 
-useEffect(() => {
-  const token = localStorage.getItem("token"); // Correctly get the token from localStorage
-  const userData = JSON.parse(localStorage.getItem("userData"));
+  useEffect(() => {
+    const token = localStorage.getItem("token"); // Correctly get the token from localStorage
+    const userData = JSON.parse(localStorage.getItem("userData"));
 
-  // If there's no token, the user isn't logged in. Redirect them.
-  if (!token) {
-    navigate("/login");
-    return;
-  }
+    // If there's no token, the user isn't logged in. Redirect them.
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
-  // Log the API_BASE_URL being used for debugging on Vercel
-  console.log("HelpSupport: API_BASE_URL:", API_BASE_URL);
+    // Log the API_BASE_URL being used for debugging on Vercel
+    console.log("HelpSupport: API_BASE_URL:", API_BASE_URL);
 
-  const fetchMessages = async () => {
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/client/support-messages`,
-        {
-          headers: { Authorization: `Bearer ${token}` }, // Now the correct token is used
-        }
-      );
-      setMessages(response.data);
-    } catch (err) {
-      console.error("HelpSupport: Fetch messages error:", err);
-      setError(err.response?.data?.message || "Error fetching messages");
-
-      if ([401, 403].includes(err.response?.status)) {
-        console.log(
-          "HelpSupport: API call failed with 401/403, redirecting to login."
+    const fetchMessages = async () => {
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/client/support-messages`,
+          {
+            headers: { Authorization: `Bearer ${token}` }, // Now the correct token is used
+          }
         );
-        localStorage.removeItem("token");
-        localStorage.removeItem("userData");
-        navigate("/login");
+        setMessages(response.data);
+      } catch (err) {
+        console.error("HelpSupport: Fetch messages error:", err);
+        setError(err.response?.data?.message || "Error fetching messages");
+
+        if ([401, 403].includes(err.response?.status)) {
+          console.log(
+            "HelpSupport: API call failed with 401/403, redirecting to login."
+          );
+          localStorage.removeItem("token");
+          localStorage.removeItem("userData");
+          navigate("/login");
+        }
       }
-    }
-  };
+    };
 
-  fetchMessages();
+    fetchMessages();
 
-  socket.on("supportReply", (msg) => {
-    if (userData && msg.userId === userData.id) {
-      setMessages((prev) => [...prev, msg]);
-    }
-  });
+    socket.on("supportReply", (msg) => {
+      if (userData && msg.userId === userData.id) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    });
 
-  return () => socket.off("supportReply");
-}, [navigate]); // navigate dependency is correct
+    return () => socket.off("supportReply");
+  }, [navigate]); // navigate dependency is correct
 
   const handleMessageChange = (e) => {
     setMessage(e.target.value);
@@ -211,12 +211,7 @@ useEffect(() => {
         <div className="mt-6 text-gray-600 text-sm">
           <p>
             For urgent issues, contact our support team at{" "}
-            <a
-              href="mailto:support@benningtonstatebank.com"
-              className="text-blue-600 hover:underline"
-            >
-              info@benigtonbk.com
-            </a>{" "}
+            <a className="text-blue-600 hover:underline">info@benigtonbk.com</a>{" "}
             or call <strong>1-800-555-1234</strong>.
           </p>
         </div>
