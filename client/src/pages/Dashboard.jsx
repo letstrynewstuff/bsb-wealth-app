@@ -216,11 +216,6 @@ const Dashboard = () => {
                   <div
                     key={index}
                     className="bg-gray-50 p-4 rounded-lg border-2 border-blue-500 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer"
-                    onClick={() =>
-                      account.type === "investment"
-                        ? handleNavigation("/investment")
-                        : handleNavigation(`/account/${account.type}`)
-                    }
                   >
                     <div className="flex items-center space-x-2 mb-2">
                       <Icon className="h-5 w-5 text-blue-600" />
@@ -291,7 +286,6 @@ const Dashboard = () => {
               ))}
             </div>
           </div>
-
 
           <div className="space-y-4 bg-white p-6 rounded-lg shadow-md border border-gray-200">
             {transactions.length > 0 ? (
