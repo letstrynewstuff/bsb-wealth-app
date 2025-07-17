@@ -208,18 +208,7 @@ const HelpSupport = () => {
           </button>
         </form>
 
-        <div className="mt-6 text-gray-600 text-sm">
-          <p>
-            For urgent issues, contact our support team at{" "}
-            <a
-              href="mailto:support@benningtonstatebank.com"
-              className="text-blue-600 hover:underline"
-            >
-              support@benningtonstatebank.com
-            </a>{" "}
-            or call <strong>1-800-555-1234</strong>.
-          </p>
-        </div>
+        
       </div>
     </div>
   );

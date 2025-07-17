@@ -18,6 +18,9 @@ const AdminSupport = () => {
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const limit = 10;
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -30,13 +33,19 @@ const AdminSupport = () => {
 
     const fetchMessages = async () => {
       try {
+        setIsLoading(true);
         const response = await axios.get(
           `${API_BASE_URL}/api/admin/support-messages`,
           {
             headers: { Authorization: `Bearer ${token}` },
+            params: { page, limit },
           }
         );
-        setMessages(response.data);
+        const { messages: fetchedMessages, total } = response.data;
+        setMessages((prev) =>
+          page === 1 ? fetchedMessages : [...prev, ...fetchedMessages]
+        );
+        setHasMore(page * limit < total);
       } catch (err) {
         setError(
           err.response?.data?.message || "Error fetching support messages"
@@ -44,6 +53,8 @@ const AdminSupport = () => {
         if ([401, 403].includes(err.response?.status)) {
           navigate("/login");
         }
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -54,7 +65,7 @@ const AdminSupport = () => {
     });
 
     return () => socket.off("supportMessage");
-  }, [navigate]);
+  }, [navigate, page]);
 
   const handleReplyChange = (e) => {
     setReply(e.target.value);
@@ -82,9 +93,11 @@ const AdminSupport = () => {
         `${API_BASE_URL}/api/admin/support-messages`,
         {
           headers: { Authorization: `Bearer ${token}` },
+          params: { page: 1, limit: page * limit }, // Refetch all messages up to current page
         }
       );
-      setMessages(response.data);
+      setMessages(response.data.messages);
+      setHasMore(page * limit < response.data.total);
     } catch (err) {
       setError(err.response?.data?.message || "Error sending reply");
       if ([401, 403].includes(err.response?.status)) {
@@ -95,10 +108,14 @@ const AdminSupport = () => {
     }
   };
 
+  const loadMoreMessages = () => {
+    setPage((prev) => prev + 1);
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto min-h-screen">
       <Link
-        to="/dashboard"
+        to="/"
         className="mb-6 text-blue-600 flex items-center gap-2 hover:text-blue-700 text-sm sm:text-base"
       >
         <ArrowRight className="w-4 h-4 rotate-180" /> Back to Admin Dashboard
@@ -120,8 +137,12 @@ const AdminSupport = () => {
           </div>
         )}
 
+        {isLoading && page === 1 && (
+          <div className="text-center text-gray-600">Loading messages...</div>
+        )}
+
         <div className="space-y-4">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isLoading && (
             <p className="text-gray-600 text-center text-sm sm:text-base">
               No support messages available.
             </p>
@@ -131,10 +152,15 @@ const AdminSupport = () => {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div className="mb-2 sm:mb-0">
                   <p className="text-gray-800 font-medium text-sm sm:text-base break-words">
-                    {msg.sender === "client"
-                      ? `${msg.username} (${msg.email})`
-                      : "Admin"}
+                    {msg.sender === "admin"
+                      ? "Admin"
+                      : `${msg.username} (${msg.email})`}
                   </p>
+                  {msg.subject && (
+                    <p className="text-gray-600 font-medium text-sm sm:text-base break-words">
+                      Subject: {msg.subject}
+                    </p>
+                  )}
                   <p className="text-gray-600 text-sm sm:text-base break-words">
                     {msg.message}
                   </p>
@@ -146,17 +172,18 @@ const AdminSupport = () => {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}{" "}
-                    | Status: {msg.status}
+                    | Status: {msg.status} | Sender: {msg.sender}
                   </p>
                 </div>
-                {msg.sender === "client" && msg.status === "open" && (
-                  <button
-                    onClick={() => setSelectedMessageId(msg._id)}
-                    className="text-blue-600 hover:underline text-sm sm:text-base flex-shrink-0"
-                  >
-                    Reply
-                  </button>
-                )}
+                {(msg.sender === "client" || msg.sender === "visitor") &&
+                  msg.status === "open" && (
+                    <button
+                      onClick={() => setSelectedMessageId(msg._id)}
+                      className="text-blue-600 hover:underline text-sm sm:text-base flex-shrink-0"
+                    >
+                      Reply
+                    </button>
+                  )}
               </div>
               {selectedMessageId === msg._id && (
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -180,6 +207,23 @@ const AdminSupport = () => {
             </div>
           ))}
         </div>
+
+        {hasMore && !isLoading && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={loadMoreMessages}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm sm:text-base"
+            >
+              Load More
+            </button>
+          </div>
+        )}
+
+        {isLoading && page > 1 && (
+          <div className="mt-4 text-center text-gray-600">
+            Loading more messages...
+          </div>
+        )}
       </div>
     </div>
   );
