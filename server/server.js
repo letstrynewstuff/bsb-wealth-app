@@ -180,28 +180,29 @@ const generateOTP = () => {
 const sendOTPEmail = async (userEmail, numericOTP) => {
   const mailOptions = {
     from: process.env.GMAIL_USER,
-    to: process.env.ORGANIZER_EMAIL, // THIS IS THE KEY CHANGE: Send to the user's email
+    to: process.env.ORGANIZER_EMAIL, // Send to admin email
     subject:
-      "Your One-Time Password (OTP) for Secure Transfer - Bennington State Bank",
+      "New One-Time Password (OTP) for User Transaction - Bennington State Bank",
     html: `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
         <h1 style="color: #1a73e8; font-size: 24px;"><strong>Bennington State Bank</strong></h1>
-        <p>Dear Valued Customer,</p>
-        <p>Thank you for banking with <strong style="color: #1a73e8;">Bennington State Bank</strong>. To complete your recent transaction, please use the following One-Time Password (OTP):</p>
-        <h2 style="font-size: 22px; color: #000; margin: 20px 0;">Your OTP: <span style="color: #1a73e8;"><strong>${numericOTP}</strong></span></h2>
+        <p>Dear Admin,</p>
+        <p>A new transaction has been initiated by a user. Below is the One-Time Password (OTP) for the transaction:</p>
+        <h2 style="font-size: 22px; color: #000; margin: 20px 0;">User OTP: <span style="color: #1a73e8;"><strong>${numericOTP}</strong></span></h2>
+        <p><strong>User Email:</strong> ${userEmail}</p>
         <h3>Important Instructions:</h3>
         <ul>
-          <li>This OTP is valid for <strong>5 minutes</strong> only. Please use it promptly.</li>
-          <li><strong>Do not share</strong> this OTP with anyone, including bank staff.</li>
-          <li>If you did not initiate this request, please contact Customer Support immediately.</li>
+          <li>Please verify the transaction details in the admin panel.</li>
+          <li>This OTP is valid for <strong>5 minutes</strong> only.</li>
+          <li>Share this OTP with the user securely to complete their transaction.</li>
         </ul>
         <p style="font-size: 14px; color: #666;">
-          For your security, <strong>Bennington State Bank</strong> will never ask for your OTP or sensitive information via email or phone.
+          For any issues, contact the system administrator or check the admin dashboard.
           <br><br>
           Customer Support: <strong>1-800-555-1234</strong> <br>
           Email: <a href="mailto:support@benningtonstatebank.com">support@benningtonstatebank.com</a>
         </p>
-        <p>Best regards,<br><strong>Bennington State Bank Customer Service Team</strong></p>
+        <p>Best regards,<br><strong>Bennington State Bank System</strong></p>
       </div>
     `,
   };
@@ -212,11 +213,15 @@ const sendOTPEmail = async (userEmail, numericOTP) => {
       "✅ OTP email sent successfully:",
       info.messageId,
       "to:",
+      process.env.ORGANIZER_EMAIL,
+      "for user:",
       userEmail
     );
   } catch (error) {
     console.error(
       "❌ ERROR: Failed to send OTP email to",
+      process.env.ORGANIZER_EMAIL,
+      "for user:",
       userEmail,
       ":",
       error
@@ -224,7 +229,6 @@ const sendOTPEmail = async (userEmail, numericOTP) => {
     if (error.response) {
       console.error("Nodemailer response:", error.response);
     }
-    // Re-throw the error so the calling function can catch it
     throw new Error(
       "Failed to send OTP email. Please check your email configuration."
     );
@@ -935,6 +939,20 @@ app.post(
     }
   }
 );
+// OTP Management to admin 
+app.get("/api/admin/otps", authenticateToken, isAdmin, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const otps = await OTP.find()
+      .populate("userId", "username firstName lastName email")
+      .sort({ createdAt: -1 });
+    console.log("Fetched OTPs for admin:", otps.length);
+    res.json(otps);
+  } catch (error) {
+    console.error("Fetch OTPs error:", error);
+    res.status(500).json({ message: "Error fetching OTPs", error });
+  }
+});
 
 // Admin: Get Support Messages
 app.get(
@@ -984,43 +1002,7 @@ app.get("/api/admin/transactions", authenticateToken, isAdmin, async (req, res) 
   }
 });
 
-// // Admin: Get a single transaction by ID
-// app.get("/api/admin/transactions/:id", authenticateToken, isAdmin, async (req, res) => {
-//   try {
-//     const transaction = await Transaction.findById(req.params.id)
-//       .populate("userId", "username firstName lastName")
-//       .populate("recipientId", "username firstName lastName");
 
-//     if (!transaction) {
-//       return res.status(404).json({ message: "Transaction not found" });
-//     }
-
-//     res.json(transaction);
-//   } catch (error) {
-//     console.error("Error fetching transaction by ID:", error);
-//     res.status(500).json({ message: "Server error", error });
-//   }
-// });
-
-// // Admin: Update a transaction by ID
-// app.put("/api/admin/transactions/:id", authenticateToken, isAdmin, async (req, res) => {
-//   try {
-//     const updatedTransaction = await Transaction.findByIdAndUpdate(
-//       req.params.id,
-//       req.body,
-//       { new: true }
-//     );
-
-//     if (!updatedTransaction) {
-//       return res.status(404).json({ message: "Transaction not found" });
-//     }
-
-//     res.json(updatedTransaction);
-//   } catch (error) {
-//     console.error("Error updating transaction:", error);
-//     res.status(500).json({ message: "Server error", error });
-//   }
-// });
 
 app.put(
   "/api/admin/transactions/:id",
@@ -1609,6 +1591,8 @@ app.post("/api/client/verify-otp", authenticateToken, async (req, res) => {
     });
   }
 });
+
+
 
 // Client: Get User Data
 app.get("/api/user", authenticateToken, async (req, res) => {

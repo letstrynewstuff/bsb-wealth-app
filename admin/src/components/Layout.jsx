@@ -170,7 +170,7 @@ const Layout = () => {
                       onClick={closeSidebar}
                     >
                       <UserPlus className="w-4 h-4 mr-2" />
-                      Add Customer
+                      Customer OTP
                     </NavLink>
                   </li>
                   <li>
