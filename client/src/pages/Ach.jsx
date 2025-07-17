@@ -1,6 +1,3 @@
-
-
-
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Landmark } from "lucide-react";
@@ -9,10 +6,6 @@ import io from "socket.io-client";
 
 const API_BASE_URL =
   import.meta.env.VITE_APP_API_URL || "http://localhost:5000";
-
-const socket = io(API_BASE_URL, {
-  auth: { token: localStorage.getItem("token") },
-});
 
 const Ach = () => {
   const navigate = useNavigate();
@@ -25,7 +18,6 @@ const Ach = () => {
     amount: "",
     description: "",
   });
-
   const [accounts, setAccounts] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -33,60 +25,94 @@ const Ach = () => {
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
-
   const otpInputRefs = useRef([]);
 
   useEffect(() => {
-      const userData = JSON.parse(localStorage.getItem("userData"));
-      const token = localStorage.getItem("token");
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    const token = localStorage.getItem("token");
 
-      const fetchAccounts = async () => {
-        try {
-          const response = await axios.get(`${API_BASE_URL}/api/account`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setAccounts(
-            response.data.accounts.filter(
-              (acc) => acc.status === "active" && acc.accountNumber
-            )
+    if (!token || !userData?.id) {
+      console.error("No token or user ID found. Redirecting to login.");
+      setError("Please log in to continue.");
+      localStorage.removeItem("token");
+      localStorage.removeItem("userData");
+      navigate("/login");
+      return;
+    }
+
+    // Initialize Socket.IO
+    const socket = io(API_BASE_URL, {
+      auth: { token },
+      reconnectionAttempts: 5,
+    });
+
+    socket.on("connect", () => {
+      console.log("Socket.IO connected:", socket.id);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("Socket.IO connection error:", err.message);
+      setError("Failed to connect to real-time updates. Please try again.");
+    });
+
+    const fetchAccounts = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/account`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setAccounts(
+          response.data.accounts.filter(
+            (acc) => acc.status === "active" && acc.accountNumber
+          )
+        );
+      } catch (err) {
+        console.error("Fetch accounts error:", err);
+        if (err.response?.status === 401) {
+          setError("Your session has expired. Please log in again.");
+          localStorage.removeItem("token");
+          localStorage.removeItem("userData");
+          navigate("/login");
+        } else {
+          setError(
+            err.response?.data?.message ||
+              "Failed to fetch accounts. Please try again."
           );
-        } catch (err) {
-          console.error("Fetch accounts error:", err);
-          if (err.response?.status === 401) {
-            setError("Your session has expired. Please log in again.");
-            localStorage.removeItem("token");
-            localStorage.removeItem("userData");
-            navigate("/login");
-          } else {
-            setError(
-              err.response?.data?.message ||
-                "Failed to fetch accounts. Please try again."
-            );
-          }
         }
-      };
-      fetchAccounts();
+      }
+    };
+    fetchAccounts();
 
     socket.on("transactionUpdate", (tx) => {
-      if (tx.userId === userData?.id) {
-        // This message will appear after OTP verification and successful transaction
+      console.log("Transaction update received:", tx);
+      console.log("Comparing user IDs:", tx.userId, userData.id);
+      if (tx.userId.toString() === userData.id.toString()) {
+        console.log("Transaction matched user ID:", userData.id);
         setSuccess(
           "Your ACH transfer has been successfully initiated. It will typically take 2-5 working days to process."
         );
-        setShowOtpPopup(false); // Close OTP popup
-        // Re-fetch accounts to update balances
+        setShowOtpPopup(false);
         fetchAccounts();
+      } else {
+        console.warn(
+          "Transaction user ID does not match:",
+          tx.userId,
+          userData.id
+        );
       }
     });
 
-    return () => socket.off("transactionUpdate");
+    return () => {
+      socket.off("transactionUpdate");
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.disconnect();
+    };
   }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (error) setError("");
-    if (success) setSuccess(""); // Clear success message on new input
   };
 
   const handleOtpChange = (index, value) => {
@@ -116,7 +142,6 @@ const Ach = () => {
     setOtpError("");
     setIsLoading(true);
 
-    // Frontend validation
     if (
       !formData.accountType ||
       !formData.recipientAccountNumber ||
@@ -157,24 +182,24 @@ const Ach = () => {
 
       const payload = {
         ...formData,
-        accountNumber: selectedAccount.accountNumber, 
+        accountNumber: selectedAccount.accountNumber,
         amount: parseFloat(formData.amount),
       };
 
-      
-      await axios.post(
-        `${API_BASE_URL}/api/client/transfers`, 
+      const response = await axios.post(
+        `${API_BASE_URL}/api/client/transfers`,
         payload,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
+      console.log("Transfer initiation response:", response.data);
       setSuccess(
         "OTP has been sent to your registered email. Please enter it to complete the transfer."
       );
       setShowOtpPopup(true);
-      setOtp(["", "", "", "", "", ""]); // Clear OTP input fields
+      setOtp(["", "", "", "", "", ""]);
     } catch (err) {
       console.error("ACH transfer initiation error:", err);
       setError(err.response?.data?.message || "Error initiating transfer.");
@@ -203,15 +228,14 @@ const Ach = () => {
         return;
       }
 
-      
-      await axios.post(
-        `${API_BASE_URL}/api/client/verify-otp`, // <-- UPDATED PATH
+      const response = await axios.post(
+        `${API_BASE_URL}/api/client/verify-otp`,
         { otp: otpCode },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Success message will be handled by the socket.on("transactionUpdate") listener
-      // Reset form and close popup
+      console.log("OTP verification response:", response.data);
+      // Success message will be set by transactionUpdate event
       setFormData({
         accountType: "",
         recipientAccountNumber: "",
@@ -222,7 +246,6 @@ const Ach = () => {
         description: "",
       });
       setOtp(["", "", "", "", "", ""]);
-      setShowOtpPopup(false);
     } catch (err) {
       console.error("OTP verification error:", err);
       setOtpError(err.response?.data?.message || "OTP verification failed.");
@@ -235,6 +258,8 @@ const Ach = () => {
       setIsLoading(false);
     }
   };
+
+  console.log("Current success state:", success);
 
   return (
     <div className="p-6 flex justify-center items-center min-h-screen bg-gray-100">
@@ -423,11 +448,6 @@ const Ach = () => {
               {otpError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
                   {otpError}
-                </div>
-              )}
-              {success && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-600 rounded-lg text-sm text-center">
-                  {success}
                 </div>
               )}
               <form onSubmit={handleOtpSubmit} className="space-y-4">
